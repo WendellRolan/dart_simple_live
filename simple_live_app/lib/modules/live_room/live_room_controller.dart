@@ -2152,6 +2152,7 @@ class LiveRoomController extends PlayerController
     liveDanmaku = site.liveSite.getDanmaku();
 
     // 停止当前播放
+    await stopBackgroundPlaybackService();
     await player.stop();
 
     // 重新拉取房间信息
@@ -2172,12 +2173,8 @@ ${errorStackTrace ?? ""}''');
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    final shouldTreatInactiveAsBackground =
-        !Platform.isWindows && !Platform.isLinux && !Platform.isMacOS;
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden ||
-        (state == AppLifecycleState.inactive &&
-            shouldTreatInactiveAsBackground)) {
+        state == AppLifecycleState.hidden) {
       Log.d("进入后台:$state");
       isBackground = true;
       _backgroundedAt = DateTime.now();
@@ -2211,6 +2208,8 @@ ${errorStackTrace ?? ""}''');
           previousPosition: positionBeforeBackground,
         ),
       );
+    } else if (state == AppLifecycleState.inactive) {
+      Log.d("应用短暂失焦:$state");
     }
   }
 

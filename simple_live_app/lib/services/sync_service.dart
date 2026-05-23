@@ -253,15 +253,32 @@ class SyncService extends GetxService {
       var body = await request.readAsString();
       Log.d('_syncFollowUserReuqest: $body');
       var jsonBody = json.decode(body);
+      if (jsonBody is! List) {
+        throw const FormatException("关注列表格式不是数组");
+      }
+      final users = <FollowUser>[];
+      for (var item in jsonBody) {
+        try {
+          if (item is Map) {
+            final user = FollowUser.fromJson(Map<String, dynamic>.from(item));
+            if (user.id.isNotEmpty &&
+                user.roomId.isNotEmpty &&
+                user.siteId.isNotEmpty) {
+              users.add(user);
+            }
+          }
+        } catch (e) {
+          Log.d("跳过异常关注项: $e");
+        }
+      }
       if (overlay == 1) {
         await DBService.instance.followBox.clear();
       }
-      for (var item in jsonBody) {
-        var user = FollowUser.fromJson(item);
+      for (var user in users) {
         await DBService.instance.followBox.put(user.id, user);
       }
 
-      SmartDialog.showToast('已同步关注用户列表');
+      SmartDialog.showToast('已同步关注用户列表（${users.length} 条）');
       EventBus.instance.emit(Constant.kUpdateFollow, 0);
       return toJsonResponse({
         'status': true,
@@ -285,15 +302,32 @@ class SyncService extends GetxService {
       var body = await request.readAsString();
       Log.d('_syncFollowUserTagRequest: $body');
       var jsonBody = json.decode(body);
+      if (jsonBody is! List) {
+        throw const FormatException("标签列表格式不是数组");
+      }
+      final tags = <FollowUserTag>[];
+      for (var item in jsonBody) {
+        try {
+          if (item is Map) {
+            final tag = FollowUserTag.fromJson(
+              Map<String, dynamic>.from(item),
+            );
+            if (tag.id.isNotEmpty) {
+              tags.add(tag);
+            }
+          }
+        } catch (e) {
+          Log.d("跳过异常标签项: $e");
+        }
+      }
       if (overlay == 1) {
         await DBService.instance.tagBox.clear();
       }
-      for (var item in jsonBody) {
-        var tag = FollowUserTag.fromJson(item);
+      for (var tag in tags) {
         await DBService.instance.tagBox.put(tag.id, tag);
       }
 
-      SmartDialog.showToast('已同步标签列表');
+      SmartDialog.showToast('已同步标签列表（${tags.length} 条）');
       EventBus.instance.emit(Constant.kUpdateFollow, 0);
       return toJsonResponse({
         'status': true,
@@ -315,11 +349,28 @@ class SyncService extends GetxService {
       var body = await request.readAsString();
       Log.d('_syncFollowUserReuqest: $body');
       var jsonBody = json.decode(body);
+      if (jsonBody is! List) {
+        throw const FormatException("历史记录格式不是数组");
+      }
+      final histories = <History>[];
+      for (var item in jsonBody) {
+        try {
+          if (item is Map) {
+            final history = History.fromJson(Map<String, dynamic>.from(item));
+            if (history.id.isNotEmpty &&
+                history.roomId.isNotEmpty &&
+                history.siteId.isNotEmpty) {
+              histories.add(history);
+            }
+          }
+        } catch (e) {
+          Log.d("跳过异常历史项: $e");
+        }
+      }
       if (overlay == 1) {
         await DBService.instance.historyBox.clear();
       }
-      for (var item in jsonBody) {
-        var history = History.fromJson(item);
+      for (var history in histories) {
         if (DBService.instance.historyBox.containsKey(history.id)) {
           var old = DBService.instance.historyBox.get(history.id);
           //如果本地的更新时间比较新，就不更新
@@ -352,8 +403,11 @@ class SyncService extends GetxService {
       var body = await request.readAsString();
       Log.d('_syncBlockedWordReuqest: $body');
       var jsonBody = json.decode(body);
+      if (jsonBody is! List) {
+        throw const FormatException("屏蔽词格式不是数组");
+      }
       if (overlay == 1) {
-        AppSettingsController.instance.clearShieldList();
+        await AppSettingsController.instance.clearShieldList();
       }
       for (var keyword in jsonBody) {
         AppSettingsController.instance
@@ -400,7 +454,13 @@ class SyncService extends GetxService {
       var body = await request.readAsString();
       Log.d('_syncBiliAccountReuqest: $body');
       var jsonBody = json.decode(body);
-      var cookie = jsonBody['cookie'];
+      if (jsonBody is! Map) {
+        throw const FormatException("账号数据格式不是对象");
+      }
+      var cookie = jsonBody['cookie']?.toString() ?? "";
+      if (cookie.isEmpty) {
+        throw const FormatException("账号 Cookie 为空");
+      }
       BiliBiliAccountService.instance.setCookie(cookie);
       BiliBiliAccountService.instance.loadUserInfo();
       SmartDialog.showToast('已同步哔哩哔哩账号');

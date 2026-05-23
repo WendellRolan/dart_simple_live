@@ -50,42 +50,73 @@ class SignalRService {
 
   HubConnection? hubConnection;
   Future<void> connect() async {
-    hubConnection = HubConnectionBuilder().withUrl(kUrl).build();
-    hubConnection!.onclose(({Exception? error}) {
-      state = SignalRConnectionState.disconnected;
-      _stateStreamController.add(state);
-    });
-    hubConnection!.onreconnected(({String? connectionId}) {
-      Log.d("reconnected: $connectionId");
+    try {
+      hubConnection = HubConnectionBuilder().withUrl(kUrl).build();
+      hubConnection!.onclose(({Exception? error}) {
+        Log.d("SignalR disconnected: $error");
+        state = SignalRConnectionState.disconnected;
+        _stateStreamController.add(state);
+      });
+      hubConnection!.onreconnected(({String? connectionId}) {
+        Log.d("SignalR reconnected: $connectionId");
+        state = SignalRConnectionState.connected;
+        _stateStreamController.add(state);
+      });
+      await hubConnection!.start();
       state = SignalRConnectionState.connected;
       _stateStreamController.add(state);
-    });
-    await hubConnection!.start();
-    state = SignalRConnectionState.connected;
-    _stateStreamController.add(state);
-    _listen();
+      _listen();
+    } catch (e) {
+      Log.logPrint(e);
+      state = SignalRConnectionState.disconnected;
+      _stateStreamController.add(state);
+      rethrow;
+    }
   }
 
   void _listen() {
     hubConnection?.on("onFavoriteReceived", (args) {
-      _onFavoriteStreamController.add((args![0] as bool, args[1] as String));
+      final data = _readBoolStringArgs(args);
+      if (data != null) {
+        _onFavoriteStreamController.add(data);
+      }
     });
     hubConnection?.on("onHistoryReceived", (args) {
-      _onHistoryStreamController.add((args![0] as bool, args[1] as String));
+      final data = _readBoolStringArgs(args);
+      if (data != null) {
+        _onHistoryStreamController.add(data);
+      }
     });
     hubConnection?.on("onShieldWordReceived", (args) {
-      _onShieldWordStreamController.add((args![0] as bool, args[1] as String));
+      final data = _readBoolStringArgs(args);
+      if (data != null) {
+        _onShieldWordStreamController.add(data);
+      }
     });
     hubConnection?.on("onBiliAccountReceived", (args) {
-      _onBiliAccountStreamController.add((args![0] as bool, args[1] as String));
+      final data = _readBoolStringArgs(args);
+      if (data != null) {
+        _onBiliAccountStreamController.add(data);
+      }
     });
     hubConnection?.on("onRoomDestroyed", (args) {
       _onRoomDestroyedStreamController.add(args![0].toString());
     });
     hubConnection?.on("onUserUpdated", (args) {
-      var list = (args![0] as List).map((e) => RoomUser.fromObject(e)).toList();
+      final rawUsers = args?.isNotEmpty == true ? args![0] : const [];
+      final list = rawUsers is List
+          ? rawUsers.map((e) => RoomUser.fromObject(e)).toList()
+          : <RoomUser>[];
       _onRoomUserUpdatedStreamController.add(list);
     });
+  }
+
+  (bool, String)? _readBoolStringArgs(List<Object?>? args) {
+    if (args == null || args.length < 2) {
+      Log.d("SignalR 收到异常同步消息: $args");
+      return null;
+    }
+    return (args[0] == true, args[1]?.toString() ?? "");
   }
 
   Future<void> disconnect() async {
@@ -153,17 +184,20 @@ class Resp<T> {
 
   factory Resp.fromJson(Map<String, dynamic> json) {
     return Resp(
-      json['isSuccess'],
+      json['isSuccess'] == true,
       json['message'] ?? "",
       json['data'],
     );
   }
 
   factory Resp.fromObject(Object? obj) {
-    if (obj is Map<String, dynamic>) {
-      return Resp.fromJson(obj);
+    if (obj is Map) {
+      return Resp.fromJson(Map<String, dynamic>.from(obj));
     }
-    return Resp(false, "unknown", null);
+    if (obj == null) {
+      return Resp(false, "服务无响应", null);
+    }
+    return Resp(false, "服务返回格式异常：$obj", null);
   }
 }
 
@@ -186,18 +220,18 @@ class RoomUser {
 
   factory RoomUser.fromJson(Map<String, dynamic> json) {
     return RoomUser(
-      connectionId: json['connectionId'],
-      shortId: json['shortId'],
-      platform: json['platform'],
-      version: json['version'],
-      app: json['app'],
-      isCreator: json['isCreator'],
+      connectionId: json['connectionId']?.toString() ?? "",
+      shortId: json['shortId']?.toString() ?? "",
+      platform: json['platform']?.toString() ?? "",
+      version: json['version']?.toString() ?? "",
+      app: json['app']?.toString() ?? "",
+      isCreator: json['isCreator'] == true,
     );
   }
 
   factory RoomUser.fromObject(Object? obj) {
-    if (obj is Map<String, dynamic>) {
-      return RoomUser.fromJson(obj);
+    if (obj is Map) {
+      return RoomUser.fromJson(Map<String, dynamic>.from(obj));
     }
     return RoomUser(
       connectionId: "",

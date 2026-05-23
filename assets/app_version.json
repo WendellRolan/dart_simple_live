@@ -1,7 +1,7 @@
 {
-  "version": "1.12.0",
-  "version_num": 11200,
-  "version_desc": "- 版本更新",
+  "version": "1.12.3",
+  "version_num": 11203,
+  "version_desc": "- Android 后台播放改为前台服务保活，减少切后台后断音\n- 修复 Android 覆盖层或小窗导致弹幕被清空的问题\n- 修复远程同步创建房间失败时提示不清楚、部分同步数据异常导致导入失败的问题\n- Windows/macOS 重复打开时改为单实例，避免出现白屏新窗口\n- 开源主页改为当前仓库，弹幕字体上限提高到 72",
   "prerelease": false,
-  "download_url": "https://github.com/June6699/dart_simple_live/releases"
+  "download_url": "https://github.com/June6699/dart_simple_live/releases/tag/v1.12.3"
 }

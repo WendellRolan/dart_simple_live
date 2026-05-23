@@ -250,7 +250,7 @@ class DanmuSettingsView extends GetView<AppSettingsController> {
                   title: "字体大小",
                   value: controller.danmuSize.value.toInt(),
                   min: 8,
-                  max: 48,
+                  max: 72,
                   onChanged: (e) {
                     final nextFontSize = e.toDouble();
                     controller.setDanmuSize(nextFontSize);

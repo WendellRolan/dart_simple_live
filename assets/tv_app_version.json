@@ -1,7 +1,7 @@
 {
-    "version": "1.7.3",
-    "version_num": 10703,
-    "version_desc": "- 修复 TV 端抖音弹幕 WebSocket 请求头拼写和浏览器请求头兼容性问题\n- 抖音弹幕连接补充直播页动态 cookie，并保留用户自定义 cookie 优先级\n- 抖音弹幕 WebSocket 增加多个备用节点，优先保留原节点，失败后再尝试备用节点\n- 修复抖音弹幕 ACK 数据字段写错的问题，提高长连接稳定性\n- TV 端增加弹幕连接失败提示，连接成功仅写日志，避免影响正常观看体验\n- 关注列表刷新策略迁移到自动并发数 + 按平台交错排队，避免单一平台阻塞导致整体刷新偏慢\n- 关注数量多导致闪退的问题会在后续版本单独处理",
+    "version": "1.7.4",
+    "version_num": 10704,
+    "version_desc": "- 修复同步房间创建失败时提示不清楚的问题\n- 增强关注、历史、屏蔽词同步导入的容错，跳过异常数据而不是直接中断\n- 兼容主 App 新版屏蔽词导出格式\n- 同步连接异常会写入更明确的日志，方便继续定位网络或服务端问题",
     "prerelease": true,
-    "download_url": "https://github.com/June6699/dart_simple_live/releases/tag/tv_v1.7.3"
+    "download_url": "https://github.com/June6699/dart_simple_live/releases/tag/tv_v1.7.4"
 }

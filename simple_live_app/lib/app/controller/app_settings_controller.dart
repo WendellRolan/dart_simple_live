@@ -5,6 +5,7 @@ import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/models/danmu_shield_preset.dart';
+import 'package:simple_live_app/services/background_playback_service.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
 
 import 'package:flutter/material.dart';
@@ -645,6 +646,9 @@ class AppSettingsController extends GetxController {
         .setValue(LocalStorageService.kAllowBackgroundPlayback, e);
     LocalStorageService.instance
         .setValue(LocalStorageService.kPlayerAutoPause, !e);
+    if (!e) {
+      BackgroundPlaybackService.instance.stop();
+    }
   }
 
   var autoFullScreen = false.obs;

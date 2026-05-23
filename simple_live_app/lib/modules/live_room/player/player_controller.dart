@@ -19,6 +19,7 @@ import 'package:simple_live_app/app/controller/base_controller.dart';
 import 'package:simple_live_app/app/custom_throttle.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/utils.dart';
+import 'package:simple_live_app/services/background_playback_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -989,6 +990,7 @@ class PlayerController extends BaseController
     _playingSubscription = player.stream.playing.listen((event) {
       if (event) {
         WakelockPlus.enable();
+        unawaited(_syncBackgroundPlaybackService(true));
         Log.d("Playing");
       }
     });
@@ -1027,10 +1029,29 @@ class PlayerController extends BaseController
 
   void mediaEnd() {
     WakelockPlus.disable();
+    unawaited(stopBackgroundPlaybackService());
   }
 
   void mediaError(String error) {
     WakelockPlus.disable();
+    unawaited(stopBackgroundPlaybackService());
+  }
+
+  Future<void> _syncBackgroundPlaybackService(bool playing) async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    if (playing &&
+        AppSettingsController.instance.allowBackgroundPlayback.value) {
+      await BackgroundPlaybackService.instance.start();
+    } else if (!playing ||
+        !AppSettingsController.instance.allowBackgroundPlayback.value) {
+      await BackgroundPlaybackService.instance.stop();
+    }
+  }
+
+  Future<void> stopBackgroundPlaybackService() {
+    return BackgroundPlaybackService.instance.stop();
   }
 
   void showDebugInfo() {
@@ -1135,6 +1156,7 @@ class PlayerController extends BaseController
   @override
   void onClose() async {
     Log.w("播放器关闭");
+    await stopBackgroundPlaybackService();
     await player.stop();
     if (smallWindowState.value) {
       await exitSmallWindow();
