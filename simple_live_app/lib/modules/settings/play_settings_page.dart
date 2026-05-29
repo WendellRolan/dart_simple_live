@@ -400,22 +400,30 @@ class PlaySettingsPage extends GetView<AppSettingsController> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  "蓝奏云、百度网盘镜像链接请查看 README。下面保留 HuggingFace 原始页面，方便核对文件名。",
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
               _SubtitleModelTile(
                 title: "高级",
-                subtitle: "Whisper large-v3，准确率高，体积大，适合高性能桌面设备。",
+                subtitle:
+                    "Whisper large-v3 int8。需要 encoder、decoder 和 tokens 文件。",
                 url:
                     "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-large-v3",
               ),
               _SubtitleModelTile(
                 title: "中级",
-                subtitle: "Paraformer zh，中文直播优先，速度和准确率比较均衡。",
+                subtitle: "Paraformer zh int8。需要 model、tokens、config 和 am.mvn。",
                 url:
                     "https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14",
               ),
               _SubtitleModelTile(
                 title: "甜点级",
                 subtitle:
-                    "Streaming Zipformer bilingual zh-en，中英实时性好，移动端优先试这个档位。",
+                    "Streaming Zipformer bilingual zh-en int8。需要 encoder、decoder、joiner、tokens、bpe 文件。",
                 url:
                     "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
               ),

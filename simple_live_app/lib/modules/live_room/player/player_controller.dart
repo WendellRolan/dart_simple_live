@@ -787,7 +787,6 @@ mixin PlayerSystemMixin on PlayerMixin, PlayerStateMixin, PlayerDanmakuMixin {
     if (AppSettingsController.instance.pipHideDanmu.value &&
         danmakuStateBeforePIP) {
       showDanmakuState.value = false;
-      danmakuController?.clear();
     }
     showControlsState.value = false;
   }
@@ -849,7 +848,6 @@ mixin PlayerSystemMixin on PlayerMixin, PlayerStateMixin, PlayerDanmakuMixin {
       return;
     }
     await cancelAutoPipOnLeave();
-    _applyPipEnteredState();
     _ensurePipStatusListener();
     await pip.enable(
       ImmediatePiP(

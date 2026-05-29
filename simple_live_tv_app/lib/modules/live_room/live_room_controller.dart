@@ -75,6 +75,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
 
   /// 双击退出Timer
   Timer? doubleClickTimer;
+  final List<String> _recentDanmuFingerprints = <String>[];
 
   @override
   void onInit() {
@@ -125,6 +126,10 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
         }
       }
 
+      if (_isDuplicateDanmu(msg)) {
+        return;
+      }
+
       if (!liveStatus.value || isBackground) {
         return;
       }
@@ -143,6 +148,28 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     } else if (msg.type == LiveMessageType.superChat) {
       //superChats.add(msg.data);
     }
+  }
+
+  bool _isDuplicateDanmu(LiveMessage msg) {
+    final settings = AppSettingsController.instance;
+    if (!settings.danmuDedupeEnable.value) {
+      return false;
+    }
+    final text = msg.message.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+    final windowSize = settings.danmuDedupeWindow.value.clamp(1, 100);
+    final fingerprint = "${msg.userName}\u0001$text";
+    final duplicate = _recentDanmuFingerprints.contains(fingerprint);
+    _recentDanmuFingerprints.add(fingerprint);
+    if (_recentDanmuFingerprints.length > windowSize) {
+      _recentDanmuFingerprints.removeRange(
+        0,
+        _recentDanmuFingerprints.length - windowSize,
+      );
+    }
+    return duplicate;
   }
 
   /// 接收 WebSocket 关闭消息

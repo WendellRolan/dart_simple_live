@@ -232,7 +232,13 @@ class LiveRoomPage extends GetView<LiveRoomController> {
   Widget buildPageUI() {
     return OrientationBuilder(
       builder: (context, orientation) {
-        final hasLandscapeActionPanel = orientation == Orientation.landscape;
+        final usePortraitLayout = Platform.isAndroid &&
+            !controller.fullScreenState.value &&
+            !controller.smallWindowState.value;
+        final effectiveOrientation =
+            usePortraitLayout ? Orientation.portrait : orientation;
+        final hasLandscapeActionPanel =
+            effectiveOrientation == Orientation.landscape;
         final scaffold = Scaffold(
           appBar: AppBar(
             automaticallyImplyLeading: false,
@@ -241,7 +247,7 @@ class LiveRoomPage extends GetView<LiveRoomController> {
                 ? _buildLandscapeAppBarTitle(context)
                 : _buildMobileAppBarTitle(context),
           ),
-          body: orientation == Orientation.portrait
+          body: effectiveOrientation == Orientation.portrait
               ? buildPhoneUI(context)
               : buildTabletUI(context),
         );
@@ -578,72 +584,55 @@ class LiveRoomPage extends GetView<LiveRoomController> {
           controller.site.id == Constant.kHuya;
       final hasContributionRankTab = controller.supportsContributionRank &&
           AppSettingsController.instance.contributionRankEnable.value;
-      final tabs = <Widget>[
-        const Tab(
-          text: "聊天",
-        ),
-        if (hasSuperChatTab)
-          Tab(
-            child: Text(
-              controller.superChats.isNotEmpty
-                  ? "${controller.site.id == Constant.kHuya ? "头条" : "SC"}(${controller.superChats.length})"
-                  : controller.site.id == Constant.kHuya
-                      ? "头条"
-                      : "SC",
-            ),
-          ),
-        if (hasContributionRankTab)
+      final tabs = <Widget>[];
+      final pages = <Widget>[];
+      void addTab(String key) {
+        switch (key) {
+          case "chat":
+            tabs.add(const Tab(text: "聊天"));
+            pages.add(buildChatList());
+            break;
+          case "super_chat":
+            if (!hasSuperChatTab) return;
+            tabs.add(
+              Tab(
+                child: Text(
+                  controller.superChats.isNotEmpty
+                      ? "${controller.site.id == Constant.kHuya ? "头条" : "SC"}(${controller.superChats.length})"
+                      : controller.site.id == Constant.kHuya
+                          ? "头条"
+                          : "SC",
+                ),
+              ),
+            );
+            pages.add(buildSuperChats());
+            break;
+          case "follow":
+            tabs.add(const Tab(text: "关注"));
+            pages.add(buildFollowList());
+            break;
+          case "settings":
+            tabs.add(const Tab(text: "设置"));
+            pages.add(buildSettings());
+            break;
+        }
+      }
+
+      for (final key in AppSettingsController.instance.liveRoomTabSort) {
+        addTab(key);
+      }
+      if (hasContributionRankTab) {
+        tabs.add(
           Tab(
             text: controller.site.id == Constant.kDouyu ? "亲密榜" : "贡献榜",
           ),
-        const Tab(
-          text: "关注",
-        ),
-        const Tab(
-          text: "设置",
-        ),
-      ];
-      final pages = <Widget>[
-        Stack(
-          children: [
-            ListView.separated(
-              controller: controller.scrollController,
-              reverse: false,
-              separatorBuilder: (_, i) => SizedBox(
-                // *2与原来的EdgeInsets.symmetric(vertical: )做兼容
-                height: AppSettingsController.instance.chatTextGap.value * 2,
-              ),
-              padding: AppStyle.edgeInsetsA12,
-              itemCount: controller.messages.length,
-              itemBuilder: (_, i) {
-                var item = controller.messages[i];
-                return buildMessageItem(item);
-              },
-            ),
-            Visibility(
-              visible: controller.disableAutoScroll.value,
-              child: Positioned(
-                right: 12,
-                bottom: 12,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    controller.forceChatScrollToBottom();
-                  },
-                  icon: const Icon(Icons.expand_more),
-                  label: const Text("最新"),
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (hasSuperChatTab) buildSuperChats(),
-        if (hasContributionRankTab)
+        );
+        pages.add(
           KeepAliveWrapper(
             child: LiveContributionRankPanel(controller: controller),
           ),
-        buildFollowList(),
-        buildSettings(),
-      ];
+        );
+      }
       return Expanded(
         child: DefaultTabController(
           length: tabs.length,
@@ -665,6 +654,41 @@ class LiveRoomPage extends GetView<LiveRoomController> {
         ),
       );
     });
+  }
+
+  Widget buildChatList() {
+    return Stack(
+      children: [
+        ListView.separated(
+          controller: controller.scrollController,
+          reverse: false,
+          separatorBuilder: (_, i) => SizedBox(
+            // *2与原来的EdgeInsets.symmetric(vertical: )做兼容
+            height: AppSettingsController.instance.chatTextGap.value * 2,
+          ),
+          padding: AppStyle.edgeInsetsA12,
+          itemCount: controller.messages.length,
+          itemBuilder: (_, i) {
+            var item = controller.messages[i];
+            return buildMessageItem(item);
+          },
+        ),
+        Visibility(
+          visible: controller.disableAutoScroll.value,
+          child: Positioned(
+            right: 12,
+            bottom: 12,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                controller.forceChatScrollToBottom();
+              },
+              icon: const Icon(Icons.expand_more),
+              label: const Text("最新"),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget buildMessageItem(LiveMessage message) {
@@ -691,6 +715,9 @@ class LiveRoomPage extends GetView<LiveRoomController> {
         message: message.message,
         imageUrls: AppSettingsController.instance.danmuRenderEmoji.value
             ? message.imageUrls
+            : null,
+        spans: AppSettingsController.instance.danmuRenderEmoji.value
+            ? message.spans
             : null,
         userStyle: userStyle,
         messageStyle: messageStyle,
@@ -765,7 +792,7 @@ class LiveRoomPage extends GetView<LiveRoomController> {
                 itemCount: controller.superChats.length,
                 separatorBuilder: (_, i) => AppStyle.vGap12,
                 itemBuilder: (_, i) {
-                  var item = controller.superChats[i];
+                  var item = controller.sortedSuperChats[i];
                   return SuperChatCard(
                     item,
                     remark: controller.getUserRemark(item.userName),
@@ -861,6 +888,45 @@ class LiveRoomPage extends GetView<LiveRoomController> {
                   },
                 ),
               ),
+              AppStyle.divider,
+              Obx(
+                () => SettingsMenu<bool>(
+                  title: controller.site.id == Constant.kHuya ? "头条排序" : "SC排序",
+                  value: AppSettingsController.instance.superChatSortDesc.value,
+                  valueMap: const {
+                    false: "按消失时间正序",
+                    true: "按消失时间倒序",
+                  },
+                  onChanged: (e) {
+                    AppSettingsController.instance.setSuperChatSortDesc(e);
+                    controller.superChats.refresh();
+                  },
+                ),
+              ),
+              AppStyle.divider,
+              Obx(
+                () => SettingsSwitch(
+                  title: "重复弹幕过滤",
+                  subtitle: "同一用户在最近若干条内重复刷同一句时只显示一次",
+                  value: AppSettingsController.instance.danmuDedupeEnable.value,
+                  onChanged: (e) {
+                    AppSettingsController.instance.setDanmuDedupeEnable(e);
+                  },
+                ),
+              ),
+              AppStyle.divider,
+              Obx(
+                () => SettingsNumber(
+                  title: "过滤窗口",
+                  subtitle: "默认 10 条；窗口越大越容易过滤刷屏",
+                  value: AppSettingsController.instance.danmuDedupeWindow.value,
+                  min: 1,
+                  max: 100,
+                  onChanged: (e) {
+                    AppSettingsController.instance.setDanmuDedupeWindow(e);
+                  },
+                ),
+              ),
               if (controller.supportsContributionRank) ...[
                 AppStyle.divider,
                 Obx(
@@ -914,6 +980,11 @@ class LiveRoomPage extends GetView<LiveRoomController> {
               ),
               AppStyle.divider,
               SettingsAction(
+                title: "直播设置",
+                onTap: controller.showLiveSettingsSheet,
+              ),
+              AppStyle.divider,
+              SettingsAction(
                 title: "定时关闭",
                 onTap: controller.showAutoExitSheet,
               ),
@@ -944,9 +1015,10 @@ class LiveRoomPage extends GetView<LiveRoomController> {
         maxWidth: 600,
       ),
       isScrollControlled: true,
-      builder: (_) => Container(
+      useSafeArea: true,
+      builder: (context) => Container(
         padding: EdgeInsets.only(
-          bottom: AppStyle.bottomBarHeight,
+          bottom: AppStyle.bottomBarHeight + _bottomSafeInset(context),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1235,22 +1307,30 @@ class LiveRoomPage extends GetView<LiveRoomController> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  "蓝奏云、百度网盘镜像链接请查看 README。下面保留 HuggingFace 原始页面，方便核对文件名。",
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
               _SubtitleModelTile(
                 title: "高级",
-                subtitle: "Whisper large-v3，准确率高，体积大，适合高性能桌面设备。",
+                subtitle:
+                    "Whisper large-v3 int8。需要 encoder、decoder 和 tokens 文件。",
                 url:
                     "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-large-v3",
               ),
               _SubtitleModelTile(
                 title: "中级",
-                subtitle: "Paraformer zh，中文直播优先，速度和准确率比较均衡。",
+                subtitle: "Paraformer zh int8。需要 model、tokens、config 和 am.mvn。",
                 url:
                     "https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14",
               ),
               _SubtitleModelTile(
                 title: "甜点级",
                 subtitle:
-                    "Streaming Zipformer bilingual zh-en，中英实时性好，移动端优先试这个档位。",
+                    "Streaming Zipformer bilingual zh-en int8。需要 encoder、decoder、joiner、tokens、bpe 文件。",
                 url:
                     "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
               ),
@@ -1312,6 +1392,7 @@ class _InteractiveChatText extends StatelessWidget {
   final String? remark;
   final String message;
   final List<String>? imageUrls;
+  final List<LiveMessageSpan>? spans;
   final TextStyle userStyle;
   final TextStyle messageStyle;
   final VoidCallback onUserTap;
@@ -1322,6 +1403,7 @@ class _InteractiveChatText extends StatelessWidget {
     this.remark,
     required this.message,
     this.imageUrls,
+    this.spans,
     required this.userStyle,
     required this.messageStyle,
     required this.onUserTap,
@@ -1329,6 +1411,7 @@ class _InteractiveChatText extends StatelessWidget {
   });
 
   TextSpan _buildTextSpan() {
+    final richSpans = spans ?? const <LiveMessageSpan>[];
     return TextSpan(
       style: messageStyle,
       children: [
@@ -1344,22 +1427,33 @@ class _InteractiveChatText extends StatelessWidget {
               fontSize: (userStyle.fontSize ?? 14) - 1,
             ),
           ),
-        TextSpan(text: message),
-        for (final url in imageUrls ?? const <String>[])
-          if (url.trim().isNotEmpty)
-            WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: NetImage(
-                  url.trim(),
-                  width: (messageStyle.fontSize ?? 14) * 1.35,
-                  height: (messageStyle.fontSize ?? 14) * 1.35,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
+        if (richSpans.isNotEmpty)
+          for (final span in richSpans)
+            if (span.isText)
+              TextSpan(text: span.text)
+            else if (span.isImage)
+              _buildImageSpan(span.imageUrl!.trim())
+            else ...[
+              TextSpan(text: message),
+              for (final url in imageUrls ?? const <String>[])
+                if (url.trim().isNotEmpty) _buildImageSpan(url.trim()),
+            ],
       ],
+    );
+  }
+
+  WidgetSpan _buildImageSpan(String url) {
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: NetImage(
+          url,
+          width: (messageStyle.fontSize ?? 14) * 1.35,
+          height: (messageStyle.fontSize ?? 14) * 1.35,
+          fit: BoxFit.contain,
+        ),
+      ),
     );
   }
 

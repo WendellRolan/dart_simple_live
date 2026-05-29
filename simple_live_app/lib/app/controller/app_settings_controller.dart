@@ -112,6 +112,16 @@ class AppSettingsController extends GetxController {
         .getValue(LocalStorageService.kAutoPipOnExit, false);
     playershowSuperChat.value = LocalStorageService.instance
         .getValue(LocalStorageService.kPlayerShowSuperChat, false);
+    superChatSortDesc.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kSuperChatSortDesc, false);
+    danmuDedupeEnable.value = LocalStorageService.instance.getValue(
+      LocalStorageService.kDanmuDedupeEnable,
+      false,
+    );
+    danmuDedupeWindow.value = LocalStorageService.instance.getValue(
+      LocalStorageService.kDanmuDedupeWindow,
+      10,
+    );
 
     _loadDanmuDelaySettings();
     _loadUserRemarks();
@@ -127,8 +137,7 @@ class AppSettingsController extends GetxController {
       LocalStorageService.kPlayerVolume,
       100.0,
     );
-    pipHideDanmu.value = LocalStorageService.instance
-        .getValue(LocalStorageService.kPIPHideDanmu, true);
+    pipHideDanmu.value = _loadPipHideDanmu();
 
     styleColor.value = LocalStorageService.instance
         .getValue(LocalStorageService.kStyleColor, 0xff3498db);
@@ -198,6 +207,25 @@ class AppSettingsController extends GetxController {
 
     initSiteSort();
     initHomeSort();
+    initLiveRoomTabSort();
+  }
+
+  bool _loadPipHideDanmu() {
+    final migrated = LocalStorageService.instance.getValue(
+      LocalStorageService.kPIPHideDanmuDefaultMigrated,
+      false,
+    );
+    if (!migrated &&
+        !LocalStorageService.instance.settingsBox
+            .containsKey(LocalStorageService.kPIPHideDanmu)) {
+      LocalStorageService.instance
+          .setValue(LocalStorageService.kPIPHideDanmuDefaultMigrated, true);
+      return false;
+    }
+    return LocalStorageService.instance.getValue(
+      LocalStorageService.kPIPHideDanmu,
+      false,
+    );
   }
 
   void initSiteSort() {
@@ -238,6 +266,25 @@ class AppSettingsController extends GetxController {
     }
 
     homeSort.value = sort;
+  }
+
+  void initLiveRoomTabSort() {
+    var sort = LocalStorageService.instance
+        .getValue(
+          LocalStorageService.kLiveRoomTabSort,
+          Constant.allLiveRoomTabs.keys.join(","),
+        )
+        .split(",")
+        .where((item) => item.trim().isNotEmpty)
+        .toList();
+    final keys = Constant.allLiveRoomTabs.keys.toList();
+    sort.removeWhere((item) => !keys.contains(item));
+    for (final key in keys) {
+      if (!sort.contains(key)) {
+        sort.add(key);
+      }
+    }
+    liveRoomTabSort.value = sort;
   }
 
   void setNoFirstRun() {
@@ -1521,6 +1568,22 @@ class AppSettingsController extends GetxController {
     );
   }
 
+  RxList<String> liveRoomTabSort = RxList<String>();
+  void setLiveRoomTabSort(List<String> e) {
+    final keys = Constant.allLiveRoomTabs.keys.toList();
+    final value = e.where((item) => keys.contains(item)).toList();
+    for (final key in keys) {
+      if (!value.contains(key)) {
+        value.add(key);
+      }
+    }
+    liveRoomTabSort.value = value;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kLiveRoomTabSort,
+      liveRoomTabSort.join(","),
+    );
+  }
+
   Rx<double> playerVolume = 100.0.obs;
   void setPlayerVolume(double value) {
     playerVolume.value = value;
@@ -1534,6 +1597,28 @@ class AppSettingsController extends GetxController {
   void setPIPHideDanmu(bool e) {
     pipHideDanmu.value = e;
     LocalStorageService.instance.setValue(LocalStorageService.kPIPHideDanmu, e);
+  }
+
+  var superChatSortDesc = false.obs;
+  void setSuperChatSortDesc(bool e) {
+    superChatSortDesc.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kSuperChatSortDesc, e);
+  }
+
+  var danmuDedupeEnable = false.obs;
+  void setDanmuDedupeEnable(bool e) {
+    danmuDedupeEnable.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kDanmuDedupeEnable, e);
+  }
+
+  var danmuDedupeWindow = 10.obs;
+  void setDanmuDedupeWindow(int e) {
+    final value = e.clamp(1, 100).toInt();
+    danmuDedupeWindow.value = value;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kDanmuDedupeWindow, value);
   }
 
   var styleColor = 0xff3498db.obs;

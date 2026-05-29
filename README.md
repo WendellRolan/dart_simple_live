@@ -89,6 +89,16 @@ TV 下载建议：
 - `SimpleLive-TV-x86_64-release.apk`：适合 Android Studio / AVD 模拟器等 `x86_64` 环境。
 - 如果不确定设备架构，优先看系统信息里的 `arm64-v8a / armeabi-v7a / x86_64`，不要盲下“最新版”。
 
+## 实时字幕模型
+
+实时字幕不内置模型，需要用户自行下载后在 App 里选择本地模型路径。后续蓝奏云、百度网盘镜像链接会补在这里；当前可先使用 HuggingFace 原始文件。
+
+本地开发机已把三档模型缓存到 `C:\softwares\dart_simple_live\models`，该目录不会提交到 git。
+
+- 高级：Whisper large-v3 int8，适合高性能桌面设备。下载 `large-v3-encoder.int8.onnx`、`large-v3-decoder.int8.onnx`、`large-v3-tokens.txt`。
+- 中级：Paraformer zh int8，适合中文直播优先场景。下载 `model.int8.onnx`、`tokens.txt`、`config.yaml`、`am.mvn`。
+- 甜点级：Streaming Zipformer bilingual zh-en int8，体积较小，适合先试用。下载 `encoder-epoch-99-avg-1.int8.onnx`、`decoder-epoch-99-avg-1.int8.onnx`、`joiner-epoch-99-avg-1.int8.onnx`、`tokens.txt`、`bpe.model`、`bpe.vocab`。
+
 ## 支持直播平台
 
 - 虎牙直播
@@ -127,6 +137,10 @@ TV 下载建议：
 - `update:` issue #24：弹幕表情支持 B 站和抖音消息里的图片字段，主 App 聊天区、主 App 播放器浮层和 TV 播放器弹幕均可显示；小窗返回时尽量保留当前弹幕层，不再整层清空重刷。
 - `update:` 实时字幕设置补到直播间设置和右上角更多菜单，并提供高级/中级/甜点级模型推荐下载入口。
 - `fix:` 其他设置里的同步服务地址在窄屏上改为短标签显示，完整地址保留在说明和编辑弹窗中。
+- `update:` 抖音表情解析按富文本片段处理，网页登录改为调用系统浏览器后粘贴 Cookie；TV 端继续通过手机或电脑同步 Cookie。
+- `update:` 播放页支持聊天 / SC 或头条 / 关注 / 设置自定义顺序，SC/头条支持按消失时间正序或倒序。
+- `update:` 重复弹幕过滤支持全端配置，默认关闭；同一用户在最近 N 条内重复发送相同内容时只显示一次。
+- `fix:` Android 非全屏播放页恢复竖屏布局，右上角更多菜单避开虚拟导航栏，小窗返回全屏时不主动清空弹幕层。
 
 ### 验证状态
 
@@ -141,7 +155,8 @@ TV 下载建议：
 - 继续验证 WebDAV 恢复、局域网二维码/手动输入、远程房间同步在不同网络环境下的失败提示和可用性。
 - 继续跟踪虎牙头条偶发不显示、视频卡住后刷新恢复、SC 高峰时播放器浮层稳定性。
 - 继续完善抖音搜索登录引导；TV 端保持无浏览器方案，通过手机或桌面端登录后同步 Cookie。
-- 评估直播间贡献榜、关注列表等右侧区域的自定义排序，以及 TV 端超大关注备份恢复的稳定性。
+- 补充实时字幕模型的蓝奏云、百度网盘镜像链接，减少用户到 HuggingFace 手动找文件的成本。
+- 评估 TV 端超大关注备份恢复的稳定性。
 
 ## 参考及引用
 

@@ -1180,6 +1180,9 @@ class _PlayerSuperChatOverlayState extends State<PlayerSuperChatOverlay> {
   Widget build(BuildContext context) {
     final sorted = _displayed.toList()
       ..sort((a, b) => a.sc.endTime.compareTo(b.sc.endTime));
+    if (AppSettingsController.instance.superChatSortDesc.value) {
+      sorted.replaceRange(0, sorted.length, sorted.reversed);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

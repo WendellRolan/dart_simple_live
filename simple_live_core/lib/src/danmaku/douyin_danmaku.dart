@@ -163,7 +163,13 @@ class DouyinDanmaku implements LiveDanmaku {
 
   void unPackWebcastChatMessage(List<int> payload) {
     var chatMessage = ChatMessage.fromBuffer(payload);
-    final imageUrls = _extractRtfImageUrls(chatMessage);
+    final spans = _extractRtfSpans(chatMessage);
+    final imageUrls = spans
+        .where((item) => item.isImage)
+        .map((item) => item.imageUrl!.trim())
+        .toSet()
+        .toList();
+    final message = _buildChatMessageText(chatMessage, spans);
     onMessage?.call(
       LiveMessage(
         type: LiveMessageType.chat,
@@ -172,43 +178,93 @@ class DouyinDanmaku implements LiveDanmaku {
         // color: chatMessage.common.fullScreenTextColor.
         //     ? LiveMessageColor.white
         //     : LiveMessageColor.numberToColor(color),
-        message: chatMessage.content,
+        message: message,
         userName: chatMessage.user.nickName,
         imageUrls: imageUrls.isEmpty ? null : imageUrls,
+        spans: spans.isEmpty ? null : spans,
       ),
     );
   }
 
-  List<String> _extractRtfImageUrls(ChatMessage chatMessage) {
-    final urls = <String>[];
-    void addFromImage(Image image) {
-      for (final url in image.urlListList) {
-        final value = url.trim();
-        if (value.isNotEmpty) {
-          urls.add(value);
+  String _buildChatMessageText(
+    ChatMessage chatMessage,
+    List<LiveMessageSpan> spans,
+  ) {
+    if (spans.isEmpty) {
+      return chatMessage.content;
+    }
+    final buffer = StringBuffer();
+    for (final span in spans) {
+      if (span.isText) {
+        buffer.write(span.text);
+      }
+    }
+    final text = buffer.toString().trim();
+    return text.isEmpty ? chatMessage.content : text;
+  }
+
+  List<LiveMessageSpan> _extractRtfSpans(ChatMessage chatMessage) {
+    final spans = <LiveMessageSpan>[];
+    if (!chatMessage.hasRtfContent()) {
+      return spans;
+    }
+    for (final piece in chatMessage.rtfContent.piecesList) {
+      if (piece.stringValue.trim().isNotEmpty) {
+        spans.add(LiveMessageSpan.text(piece.stringValue));
+      }
+      if (piece.hasPatternRefValue()) {
+        final pattern = piece.patternRefValue.defaultPattern.trim();
+        if (pattern.isNotEmpty) {
+          spans.add(LiveMessageSpan.text(pattern));
+        }
+      }
+      if (piece.hasImageValue() && piece.imageValue.hasImage()) {
+        final imageUrl = _extractImageUrl(piece.imageValue.image);
+        if (imageUrl != null) {
+          spans.add(LiveMessageSpan.image(imageUrl));
+          continue;
+        }
+        final fallback = _extractImageFallbackText(piece.imageValue.image);
+        if (fallback != null) {
+          spans.add(LiveMessageSpan.text(fallback));
         }
       }
     }
+    return spans;
+  }
 
-    if (chatMessage.hasBackgroundImage()) {
-      addFromImage(chatMessage.backgroundImage);
-    }
-    if (chatMessage.hasBackgroundImageV2()) {
-      addFromImage(chatMessage.backgroundImageV2);
-    }
-    if (chatMessage.hasGiftImage()) {
-      addFromImage(chatMessage.giftImage);
-    }
-    if (!chatMessage.hasRtfContent()) {
-      return urls.toSet().toList();
-    }
-    for (final piece in chatMessage.rtfContent.piecesList) {
-      if (!piece.hasImageValue() || !piece.imageValue.hasImage()) {
-        continue;
+  String? _extractImageUrl(Image image) {
+    for (final url in image.urlListList) {
+      final value = url.trim();
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        return value;
       }
-      addFromImage(piece.imageValue.image);
     }
-    return urls.toSet().toList();
+    final openWebUrl = image.openWebUrl.trim();
+    if (openWebUrl.startsWith('http://') || openWebUrl.startsWith('https://')) {
+      return openWebUrl;
+    }
+    final uri = image.uri.trim();
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      return uri;
+    }
+    return null;
+  }
+
+  String? _extractImageFallbackText(Image image) {
+    final alternativeText = image.content.alternativeText.trim();
+    if (alternativeText.isNotEmpty) {
+      return alternativeText;
+    }
+    final name = image.content.name.trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    final uri = image.uri.trim();
+    if (uri.isNotEmpty) {
+      return '[$uri]';
+    }
+    return null;
   }
 
   void unPackWebcastRoomUserSeqMessage(List<int> payload) {

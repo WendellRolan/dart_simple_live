@@ -62,6 +62,10 @@ class LocalStorageService extends GetxService {
   /// 显示弹幕表情
   static const String kDanmuRenderEmoji = "DanmuRenderEmoji";
 
+  /// 重复弹幕过滤
+  static const String kDanmuDedupeEnable = "DanmuDedupeEnable";
+  static const String kDanmuDedupeWindow = "DanmuDedupeWindow";
+
   /// 硬件解码
   static const String kHardwareDecode = "HardwareDecode";
 

@@ -30,6 +30,14 @@ class AppSettingsController extends GetxController {
         .getValue(LocalStorageService.kDanmuEnable, true);
     danmuRenderEmoji.value = LocalStorageService.instance
         .getValue(LocalStorageService.kDanmuRenderEmoji, true);
+    danmuDedupeEnable.value = LocalStorageService.instance.getValue(
+      LocalStorageService.kDanmuDedupeEnable,
+      false,
+    );
+    danmuDedupeWindow.value = LocalStorageService.instance.getValue(
+      LocalStorageService.kDanmuDedupeWindow,
+      10,
+    );
     danmuStrokeWidth.value = LocalStorageService.instance
         .getValue(LocalStorageService.kDanmuStrokeWidth, 4.0);
     danmuTopMargin.value = LocalStorageService.instance
@@ -184,6 +192,21 @@ class AppSettingsController extends GetxController {
     danmuRenderEmoji.value = e;
     LocalStorageService.instance
         .setValue(LocalStorageService.kDanmuRenderEmoji, e);
+  }
+
+  var danmuDedupeEnable = false.obs;
+  void setDanmuDedupeEnable(bool e) {
+    danmuDedupeEnable.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kDanmuDedupeEnable, e);
+  }
+
+  var danmuDedupeWindow = 10.obs;
+  void setDanmuDedupeWindow(int e) {
+    final value = e.clamp(1, 100).toInt();
+    danmuDedupeWindow.value = value;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kDanmuDedupeWindow, value);
   }
 
   var danmuStrokeWidth = 4.0.obs;

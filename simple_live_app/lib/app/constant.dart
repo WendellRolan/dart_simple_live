@@ -28,6 +28,25 @@ class Constant {
     ),
   };
 
+  static final Map<String, LiveRoomTabItem> allLiveRoomTabs = {
+    "chat": LiveRoomTabItem(
+      iconData: Remix.message_3_line,
+      title: "聊天",
+    ),
+    "super_chat": LiveRoomTabItem(
+      iconData: Remix.sparkling_line,
+      title: "SC/头条",
+    ),
+    "follow": LiveRoomTabItem(
+      iconData: Remix.heart_line,
+      title: "关注",
+    ),
+    "settings": LiveRoomTabItem(
+      iconData: Remix.settings_3_line,
+      title: "设置",
+    ),
+  };
+
   static const String kBiliBili = "bilibili";
   static const String kDouyu = "douyu";
   static const String kHuya = "huya";
@@ -42,5 +61,15 @@ class HomePageItem {
     required this.iconData,
     required this.title,
     required this.index,
+  });
+}
+
+class LiveRoomTabItem {
+  final IconData iconData;
+  final String title;
+
+  LiveRoomTabItem({
+    required this.iconData,
+    required this.title,
   });
 }

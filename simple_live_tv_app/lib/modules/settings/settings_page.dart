@@ -151,7 +151,8 @@ class SettingsPage extends GetView<SettingsController> {
               0: "关",
               1: "开",
             },
-            value: AppSettingsController.instance.danmuRenderEmoji.value ? 1 : 0,
+            value:
+                AppSettingsController.instance.danmuRenderEmoji.value ? 1 : 0,
             onChanged: (e) {
               AppSettingsController.instance.setDanmuRenderEmoji(e == 1);
             },
@@ -429,6 +430,41 @@ class SettingsPage extends GetView<SettingsController> {
             value: AppSettingsController.instance.danmuStrokeWidth.value,
             onChanged: (e) {
               AppSettingsController.instance.setDanmuStrokeWidth(e);
+            },
+          ),
+        ),
+        AppStyle.vGap24,
+        Obx(
+          () => SettingsItemWidget(
+            foucsNode: controller.danmakuDedupeFoucsNode,
+            autofocus: controller.danmakuDedupeFoucsNode.isFoucsed.value,
+            title: "重复过滤",
+            items: const {
+              0: "关",
+              1: "开",
+            },
+            value:
+                AppSettingsController.instance.danmuDedupeEnable.value ? 1 : 0,
+            onChanged: (e) {
+              AppSettingsController.instance.setDanmuDedupeEnable(e == 1);
+            },
+          ),
+        ),
+        AppStyle.vGap24,
+        Obx(
+          () => SettingsItemWidget(
+            foucsNode: controller.danmakuDedupeWindowFoucsNode,
+            autofocus: controller.danmakuDedupeWindowFoucsNode.isFoucsed.value,
+            title: "过滤窗口",
+            items: const {
+              5: "5条",
+              10: "10条",
+              20: "20条",
+              50: "50条",
+            },
+            value: AppSettingsController.instance.danmuDedupeWindow.value,
+            onChanged: (e) {
+              AppSettingsController.instance.setDanmuDedupeWindow(e);
             },
           ),
         ),

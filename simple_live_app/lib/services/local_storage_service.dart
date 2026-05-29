@@ -9,6 +9,7 @@ class LocalStorageService extends GetxService {
   static const String kPlayerScaleMode = "ScaleMode";
   static const String kSiteSort = "SiteSort";
   static const String kHomeSort = "HomeSort";
+  static const String kLiveRoomTabSort = "LiveRoomTabSort";
   static const String kThemeMode = "ThemeMode";
   static const String kDebugModeKey = "DebugMode";
   static const String kDanmuSize = "DanmuSize";
@@ -49,6 +50,11 @@ class LocalStorageService extends GetxService {
   static const String kPlayerShowSuperChat = "PlayerShowSuperChat";
   static const String kPlayerVolume = "PlayerVolume";
   static const String kPIPHideDanmu = "PIPHideDanmu";
+  static const String kPIPHideDanmuDefaultMigrated =
+      "PIPHideDanmuDefaultMigrated";
+  static const String kSuperChatSortDesc = "SuperChatSortDesc";
+  static const String kDanmuDedupeEnable = "DanmuDedupeEnable";
+  static const String kDanmuDedupeWindow = "DanmuDedupeWindow";
   static const String kBilibiliCookie = "BilibiliCookie";
   static const String kDouyinCookie = "DouyinCookie";
   static const String kStyleColor = "kStyleColor";

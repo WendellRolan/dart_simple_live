@@ -47,6 +47,8 @@ class SettingsController extends BaseController
   var danmakuAreaFoucsNode = AppFocusNode();
   var danmakuOpacityFoucsNode = AppFocusNode();
   var danmakuStorkeFoucsNode = AppFocusNode();
+  var danmakuDedupeFoucsNode = AppFocusNode();
+  var danmakuDedupeWindowFoucsNode = AppFocusNode();
 
   var autoUpdateFollowEnableFocusNode = AppFocusNode();
   var autoUpdateFollowDurationFocusNode = AppFocusNode();
@@ -64,5 +66,4 @@ class SettingsController extends BaseController
       AppNavigator.toBiliBiliLogin();
     }
   }
-
 }

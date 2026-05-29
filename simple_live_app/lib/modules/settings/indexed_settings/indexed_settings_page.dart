@@ -49,6 +49,34 @@ class IndexedSettingsPage extends GetView<IndexedSettingsController> {
           Padding(
             padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
             child: Text(
+              "播放页排序 (长按拖动排序，重启后生效)",
+              style: Get.textTheme.titleSmall,
+            ),
+          ),
+          SettingsCard(
+            child: Obx(
+              () => ReorderableListView(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                onReorder: controller.updateLiveRoomTabSort,
+                children: controller.liveRoomTabSort.map(
+                  (key) {
+                    var e = Constant.allLiveRoomTabs[key]!;
+                    return ListTile(
+                      key: ValueKey(e.title),
+                      title: Text(e.title),
+                      visualDensity: VisualDensity.compact,
+                      leading: Icon(e.iconData),
+                      trailing: const Icon(Icons.drag_handle),
+                    );
+                  },
+                ).toList(),
+              ),
+            ),
+          ),
+          Padding(
+            padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
+            child: Text(
               "平台排序 (长按拖动排序，重启后生效)",
               style: Get.textTheme.titleSmall,
             ),

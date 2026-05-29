@@ -29,6 +29,8 @@ import 'package:simple_live_app/widgets/filter_button.dart';
 import 'package:simple_live_app/widgets/desktop_refresh_button.dart';
 import 'package:simple_live_app/widgets/follow_user_item.dart';
 import 'package:simple_live_app/widgets/net_image.dart';
+import 'package:simple_live_app/widgets/settings/settings_card.dart';
+import 'package:simple_live_app/widgets/settings/settings_switch.dart';
 import 'package:simple_live_app/widgets/status/app_empty_widget.dart';
 import 'package:simple_live_core/simple_live_core.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -142,6 +144,7 @@ class LiveRoomController extends PlayerController
   bool _roomDisposed = false;
   int _loadGeneration = 0;
   final Set<String> _superChatFingerprints = <String>{};
+  final List<String> _recentDanmuFingerprints = <String>[];
   final Set<Timer> _pendingDanmakuTimers = <Timer>{};
   Timer? _superChatRefreshTimer;
   Timer? _chatBottomRestoreTimer;
@@ -216,6 +219,40 @@ class LiveRoomController extends PlayerController
       }
     }
     return false;
+  }
+
+  bool _isDuplicateDanmu(LiveMessage msg) {
+    if (msg.userName == "LiveSysMessage") {
+      return false;
+    }
+    final settings = AppSettingsController.instance;
+    if (!settings.danmuDedupeEnable.value) {
+      return false;
+    }
+    final text = msg.message.trim();
+    if (text.isEmpty) {
+      return false;
+    }
+    final windowSize = settings.danmuDedupeWindow.value.clamp(1, 100);
+    final fingerprint = "${msg.userName}\u0001$text";
+    final duplicate = _recentDanmuFingerprints.contains(fingerprint);
+    _recentDanmuFingerprints.add(fingerprint);
+    if (_recentDanmuFingerprints.length > windowSize) {
+      _recentDanmuFingerprints.removeRange(
+        0,
+        _recentDanmuFingerprints.length - windowSize,
+      );
+    }
+    return duplicate;
+  }
+
+  List<LiveSuperChatMessage> get sortedSuperChats {
+    final list = superChats.toList();
+    list.sort((a, b) => a.endTime.compareTo(b.endTime));
+    if (AppSettingsController.instance.superChatSortDesc.value) {
+      return list.reversed.toList();
+    }
+    return list;
   }
 
   bool _isUserShielded(String userName) {
@@ -953,6 +990,10 @@ class LiveRoomController extends PlayerController
         return;
       }
 
+      if (_isDuplicateDanmu(msg)) {
+        return;
+      }
+
       messages.add(msg);
 
       WidgetsBinding.instance.addPostFrameCallback(
@@ -1465,6 +1506,62 @@ class LiveRoomController extends PlayerController
               Get.back();
               showDanmuShield();
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void showLiveSettingsSheet() {
+    final settings = AppSettingsController.instance;
+    Utils.showBottomSheet(
+      title: "直播设置",
+      child: ListView(
+        padding: AppStyle.edgeInsetsA12,
+        children: [
+          SettingsCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Obx(
+                  () => SettingsSwitch(
+                    title: "硬件解码",
+                    subtitle: "播放失败可尝试关闭此选项",
+                    value: settings.hardwareDecode.value,
+                    onChanged: settings.setHardwareDecode,
+                  ),
+                ),
+                if (Platform.isAndroid) ...[
+                  AppStyle.divider,
+                  Obx(
+                    () => SettingsSwitch(
+                      title: "兼容模式",
+                      subtitle: "若播放卡顿可尝试打开此选项",
+                      value: settings.playerCompatMode.value,
+                      onChanged: settings.setPlayerCompatMode,
+                    ),
+                  ),
+                ],
+                AppStyle.divider,
+                Obx(
+                  () => SettingsSwitch(
+                    title: "后台播放",
+                    subtitle: "移动端仍可能被系统省电策略关闭",
+                    value: settings.allowBackgroundPlayback.value,
+                    onChanged: settings.setAllowBackgroundPlayback,
+                  ),
+                ),
+                AppStyle.divider,
+                Obx(
+                  () => SettingsSwitch(
+                    title: "强制 HTTPS",
+                    subtitle: "将 http 播放链接替换为 https",
+                    value: settings.playerForceHttps.value,
+                    onChanged: settings.setPlayerForceHttps,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

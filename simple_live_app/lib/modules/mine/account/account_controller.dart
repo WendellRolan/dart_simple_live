@@ -13,12 +13,6 @@ import 'package:url_launcher/url_launcher_string.dart';
 class AccountController extends GetxController {
   static const _douyinHomeUrl = "https://www.douyin.com/";
 
-  bool get _supportsDouyinWebLogin =>
-      Platform.isAndroid ||
-      Platform.isIOS ||
-      Platform.isWindows ||
-      Platform.isMacOS;
-
   void bilibiliTap() async {
     if (BiliBiliAccountService.instance.logined.value) {
       var result = await Utils.showAlertDialog("确定要退出哔哩哔哩账号吗？", title: "退出登录");
@@ -98,31 +92,15 @@ class AccountController extends GetxController {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Visibility(
-            visible: _supportsDouyinWebLogin,
-            child: ListTile(
-              leading: const Icon(Icons.qr_code_scanner),
-              title: const Text("网页登录/扫码登录"),
-              subtitle: const Text("登录自己的抖音账号，保存 Cookie 后可用于搜索"),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Get.back();
-                Get.toNamed(RoutePath.kDouyinWebLogin);
-              },
-            ),
-          ),
-          Visibility(
-            visible: Platform.isLinux,
-            child: ListTile(
-              leading: const Icon(Icons.open_in_browser),
-              title: const Text("浏览器登录后粘贴 Cookie"),
-              subtitle: const Text("Linux 暂无内置 WebView，打开浏览器登录后手动粘贴完整 Cookie"),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () async {
-                Get.back();
-                await openDouyinInBrowserThenConfigCookie();
-              },
-            ),
+          ListTile(
+            leading: const Icon(Icons.open_in_browser),
+            title: const Text("浏览器登录后粘贴 Cookie"),
+            subtitle: const Text("使用系统浏览器打开抖音，登录后回到这里粘贴完整 Cookie"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              Get.back();
+              await openDouyinInBrowserThenConfigCookie();
+            },
           ),
           ListTile(
             leading: const Icon(Icons.edit_outlined),
