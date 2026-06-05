@@ -84,25 +84,26 @@ class BasePageController<T> extends BaseController {
       pageError.value = false;
       pageEmpty.value = false;
       notLogin.value = false;
-      pageLoadding.value = currentPage == 1;
+      final page = currentPage;
+      pageLoadding.value = page == 1;
 
-      var result = await getData(currentPage, pageSize);
-      //是否可以加载更多
+      var result = await getData(page, pageSize);
+      // 赋值数据
+      if (page == 1) {
+        list.value = result;
+      } else {
+        list.addAll(result);
+      }
+      // 是否可以加载更多
       if (result.isNotEmpty) {
-        currentPage++;
+        currentPage = page + 1;
         canLoadMore.value = true;
         pageEmpty.value = false;
       } else {
         canLoadMore.value = false;
-        if (currentPage == 1) {
+        if (page == 1 && result.isEmpty) {
           pageEmpty.value = true;
         }
-      }
-      // 赋值数据
-      if (currentPage == 1) {
-        list.value = result;
-      } else {
-        list.addAll(result);
       }
     } catch (e) {
       handleError(e, showPageError: currentPage == 1);

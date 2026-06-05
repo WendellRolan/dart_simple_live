@@ -265,6 +265,31 @@ class LiveRoomPage extends GetView<LiveRoomController> {
             usePortraitLayout ? Orientation.portrait : orientation;
         final hasLandscapeActionPanel =
             effectiveOrientation == Orientation.landscape;
+        if (_isDesktop && hasLandscapeActionPanel) {
+          return PopScope(
+            canPop: _allowsNativePopGesture(),
+            onPopInvokedWithResult: (didPop, result) async {
+              if (didPop) {
+                await controller.cancelAutoPipOnLeave();
+                return;
+              }
+              await _handleBack(context);
+            },
+            child: Scaffold(
+              body: Column(
+                children: [
+                  SizedBox(
+                    height: kToolbarHeight,
+                    child: _buildLandscapeAppBarTitle(context),
+                  ),
+                  Expanded(
+                    child: buildTabletUI(context),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         final scaffold = Scaffold(
           appBar: AppBar(
             automaticallyImplyLeading: false,

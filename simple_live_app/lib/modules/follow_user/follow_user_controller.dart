@@ -78,7 +78,7 @@ class FollowUserController extends BasePageController<FollowUser> {
   Future refreshData() async {
     await FollowService.instance.loadData();
     updateTagList();
-    super.refreshData();
+    filterData();
   }
 
   @override
@@ -110,6 +110,20 @@ class FollowUserController extends BasePageController<FollowUser> {
     currentPage = end < items.length ? 2 : 1;
     canLoadMore.value = end < items.length;
     pageEmpty.value = items.isEmpty;
+  }
+
+  List<FollowUser> _distinctFollowUsers(Iterable<FollowUser> items) {
+    final result = <FollowUser>[];
+    final seenIds = <String>{};
+    for (final item in items) {
+      final id = item.id.trim().isNotEmpty
+          ? item.id.trim()
+          : "${item.siteId}_${item.roomId}";
+      if (seenIds.add(id)) {
+        result.add(item);
+      }
+    }
+    return result;
   }
 
   List<FollowGroupOption> get groupOptions {
@@ -166,22 +180,28 @@ class FollowUserController extends BasePageController<FollowUser> {
     final source = FollowService.instance.followList;
     if (selected == null || selected.id == "all") {
       selectedGroupId.value = "all";
-      return FollowService.instance.sortFollowUsers(source);
+      return FollowService.instance.sortFollowUsers(
+        _distinctFollowUsers(source),
+      );
     }
     final liveStatus = selected.liveStatus;
     if (liveStatus != null) {
       final expectedStatus = liveStatus == 1 ? {0, 1} : {liveStatus};
       return FollowService.instance.sortFollowUsers(
-        source.where((item) => expectedStatus.contains(item.liveStatus.value)),
+        _distinctFollowUsers(
+          source.where((item) => expectedStatus.contains(item.liveStatus.value)),
+        ),
       );
     }
     final siteId = selected.siteId;
     if (siteId != null) {
       return FollowService.instance.sortFollowUsers(
-        source.where((item) => item.siteId == siteId),
+        _distinctFollowUsers(source.where((item) => item.siteId == siteId)),
       );
     }
-    return FollowService.instance.sortFollowUsers(source);
+    return FollowService.instance.sortFollowUsers(
+      _distinctFollowUsers(source),
+    );
   }
 
   void setGroupMode(FollowGroupMode mode) {
