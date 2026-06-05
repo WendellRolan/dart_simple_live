@@ -69,18 +69,25 @@ class LiveRoomController extends PlayerController
   RxList<LiveSuperChatMessage> superChats = RxList<LiveSuperChatMessage>();
   RxList<LiveContributionRankItem> contributionRanks =
       RxList<LiveContributionRankItem>();
+  RxList<LiveRepeatedDanmuSummary> liveEventFlows =
+      RxList<LiveRepeatedDanmuSummary>();
   var contributionRankLoading = false.obs;
   var contributionRankFetched = false.obs;
   Rx<String?> contributionRankError = Rx<String?>(null);
   Rx<DateTime?> contributionRankUpdatedAt = Rx<DateTime?>(null);
   RxDouble danmakuViewportHeight = 0.0.obs;
   final liveRoomFollowFilterMode = 0.obs;
+  final desktopSidePanelCollapsed = false.obs;
   RxSet<String> tempMutedUsers = <String>{}.obs;
   bool get supportsContributionRank => const {
         Constant.kBiliBili,
         Constant.kDouyu,
         Constant.kDouyin,
       }.contains(site.id);
+
+  void toggleDesktopSidePanel() {
+    desktopSidePanelCollapsed.value = !desktopSidePanelCollapsed.value;
+  }
 
   /// 聊天列表滚动控制器
   final ScrollController scrollController = ScrollController();
@@ -146,10 +153,13 @@ class LiveRoomController extends PlayerController
   bool _roomDisposed = false;
   int _loadGeneration = 0;
   final Set<String> _superChatFingerprints = <String>{};
+  final LiveRepeatedDanmuAggregator _liveEventFlowAggregator =
+      LiveRepeatedDanmuAggregator();
   final Queue<String> _recentDanmuFingerprints = Queue<String>();
   final Map<String, int> _recentDanmuCounts = <String, int>{};
   int _recentDanmuEventsSincePrune = 0;
   final Set<Timer> _pendingDanmakuTimers = <Timer>{};
+  Timer? _liveEventFlowTimer;
   Timer? _superChatRefreshTimer;
   Timer? _chatBottomRestoreTimer;
   Timer? _onlineRefreshTimer;
@@ -169,6 +179,7 @@ class LiveRoomController extends PlayerController
     showDanmakuState.value = AppSettingsController.instance.danmuEnable.value;
     followed.value = DBService.instance.getFollowExist("${site.id}_$roomId");
     loadData();
+    _startLiveEventFlowTimer();
 
     scrollController.addListener(scrollListener);
 
@@ -233,23 +244,40 @@ class LiveRoomController extends PlayerController
     if (!settings.danmuDedupeEnable.value) {
       return false;
     }
-    final fingerprint = _buildDanmuFingerprint(msg);
+    final strictMode = settings.danmuDedupeStrictMode;
+    final fingerprint = _buildDanmuFingerprint(
+      msg,
+      includeUserName: !strictMode,
+    );
     if (fingerprint == null) {
       return false;
     }
-    final windowSize = settings.danmuDedupeWindow.value.clamp(1, 100);
-    final step = settings.danmuDedupeStep.value.clamp(1, 20);
+    final windowSize = settings.effectiveDanmuDedupeWindow;
     final duplicate = _recentDanmuCounts.containsKey(fingerprint);
     _recentDanmuFingerprints.addLast(fingerprint);
     _recentDanmuCounts[fingerprint] =
         (_recentDanmuCounts[fingerprint] ?? 0) + 1;
+    if (strictMode) {
+      _recentDanmuEventsSincePrune = 0;
+      _pruneRecentDanmuFingerprints(windowSize);
+      return duplicate;
+    }
+
+    final step = settings.danmuDedupeStep.value.clamp(1, 20).toInt();
     _recentDanmuEventsSincePrune += 1;
     final shouldPrune = _recentDanmuEventsSincePrune >= step ||
         _recentDanmuFingerprints.length > windowSize + step - 1;
     if (shouldPrune) {
       _recentDanmuEventsSincePrune = 0;
     }
-    while (shouldPrune && _recentDanmuFingerprints.length > windowSize) {
+    if (shouldPrune) {
+      _pruneRecentDanmuFingerprints(windowSize);
+    }
+    return duplicate;
+  }
+
+  void _pruneRecentDanmuFingerprints(int windowSize) {
+    while (_recentDanmuFingerprints.length > windowSize) {
       final removed = _recentDanmuFingerprints.removeFirst();
       final count = (_recentDanmuCounts[removed] ?? 0) - 1;
       if (count <= 0) {
@@ -258,14 +286,12 @@ class LiveRoomController extends PlayerController
         _recentDanmuCounts[removed] = count;
       }
     }
-    return duplicate;
   }
 
-  String? _buildDanmuFingerprint(LiveMessage msg) {
-    final userName = _normalizeDanmuFingerprintPart(msg.userName);
-    if (userName.isEmpty) {
-      return null;
-    }
+  String? _buildDanmuFingerprint(
+    LiveMessage msg, {
+    required bool includeUserName,
+  }) {
     final parts = <String>[];
     final message = _normalizeDanmuFingerprintPart(msg.message);
     if (message.isNotEmpty) {
@@ -288,6 +314,13 @@ class LiveRoomController extends PlayerController
       }
     }
     if (parts.isEmpty) {
+      return null;
+    }
+    if (!includeUserName) {
+      return parts.join("\u0002");
+    }
+    final userName = _normalizeDanmuFingerprintPart(msg.userName);
+    if (userName.isEmpty) {
       return null;
     }
     return "$userName\u0001${parts.join("\u0002")}";
@@ -837,6 +870,54 @@ class LiveRoomController extends PlayerController
     contributionRankUpdatedAt.value = null;
   }
 
+  void _startLiveEventFlowTimer() {
+    _liveEventFlowTimer?.cancel();
+    _liveEventFlowTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _flushLiveEventFlow(),
+    );
+  }
+
+  void _recordLiveEventFlow(LiveMessage msg) {
+    if (msg.userName == "LiveSysMessage") {
+      return;
+    }
+    final settings = AppSettingsController.instance;
+    if (!settings.liveEventFlowEnable.value) {
+      _liveEventFlowAggregator.clear();
+      liveEventFlows.clear();
+      return;
+    }
+    final text = _normalizeMessageText(msg.message);
+    if (text.isEmpty) {
+      return;
+    }
+    _liveEventFlowAggregator.add(text);
+  }
+
+  void _flushLiveEventFlow() {
+    final settings = AppSettingsController.instance;
+    if (!settings.liveEventFlowEnable.value) {
+      _liveEventFlowAggregator.clear();
+      liveEventFlows.clear();
+      return;
+    }
+    final summaries = _liveEventFlowAggregator.drain();
+    if (summaries.isEmpty) {
+      return;
+    }
+    liveEventFlows.insertAll(0, summaries);
+    final limit = settings.liveEventFlowLimit.value;
+    if (liveEventFlows.length > limit) {
+      liveEventFlows.removeRange(limit, liveEventFlows.length);
+    }
+  }
+
+  void clearLiveEventFlow() {
+    _liveEventFlowAggregator.clear();
+    liveEventFlows.clear();
+  }
+
   Future<void> fetchContributionRank({bool forceRefresh = false}) async {
     if (!AppSettingsController.instance.contributionRankEnable.value ||
         !supportsContributionRank ||
@@ -959,6 +1040,7 @@ class LiveRoomController extends PlayerController
     _clearDanmuDedupeState();
     _clearSuperChatState();
     _clearContributionRankState();
+    clearLiveEventFlow();
     liveDanmaku.stop();
     if (detail.value != null) {
       getSuperChatMessage();
@@ -984,6 +1066,7 @@ class LiveRoomController extends PlayerController
     scrollController.removeListener(scrollListener);
     autoExitTimer?.cancel();
     _superChatRefreshTimer?.cancel();
+    _liveEventFlowTimer?.cancel();
     _onlineRefreshTimer?.cancel();
     _chatBottomRestoreTimer?.cancel();
     _cancelPendingDanmakuTimers();
@@ -1048,6 +1131,8 @@ class LiveRoomController extends PlayerController
       if (_isKeywordShielded(msg)) {
         return;
       }
+
+      _recordLiveEventFlow(msg);
 
       if (_isDuplicateDanmu(msg)) {
         return;
@@ -2467,6 +2552,7 @@ class LiveRoomController extends PlayerController
     _clearDanmuDedupeState();
     _clearSuperChatState();
     _clearContributionRankState();
+    clearLiveEventFlow();
     _cancelPendingDanmakuTimers();
     clearDanmakuReplayHistory();
     danmakuController?.clear();

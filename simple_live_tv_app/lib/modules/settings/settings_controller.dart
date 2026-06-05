@@ -48,6 +48,7 @@ class SettingsController extends BaseController
   var danmakuOpacityFoucsNode = AppFocusNode();
   var danmakuStorkeFoucsNode = AppFocusNode();
   var danmakuDedupeFoucsNode = AppFocusNode();
+  var danmakuDedupeModeFoucsNode = AppFocusNode();
   var danmakuDedupeWindowFoucsNode = AppFocusNode();
   var danmakuDedupeStepFoucsNode = AppFocusNode();
 

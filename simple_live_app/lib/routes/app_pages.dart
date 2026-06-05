@@ -1,5 +1,7 @@
 // ignore_for_file: prefer_inlined_adds
 
+import 'dart:io';
+
 import 'package:get/get.dart';
 import 'package:simple_live_app/modules/category/detail/category_detail_controller.dart';
 import 'package:simple_live_app/modules/category/detail/category_detail_page.dart';
@@ -120,6 +122,8 @@ class AppPages {
     GetPage(
       name: RoutePath.kLiveRoomDetail,
       page: () => const LiveRoomPage(),
+      transition: Platform.isIOS ? Transition.cupertino : null,
+      popGesture: Platform.isIOS,
       binding: BindingsBuilder.put(
         () => LiveRoomController(
           pSite: Get.arguments,

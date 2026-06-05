@@ -40,22 +40,7 @@ class PlaybackPageSettingsPage extends GetView<IndexedSettingsController> {
                           item.subtitle == null ? null : Text(item.subtitle!),
                       visualDensity: VisualDensity.compact,
                       leading: Icon(item.iconData),
-                      trailing: key == "contribution_rank"
-                          ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Obx(
-                                  () => Switch(
-                                    value:
-                                        controller.contributionRankEnable.value,
-                                    onChanged:
-                                        controller.setContributionRankEnable,
-                                  ),
-                                ),
-                                const Icon(Icons.drag_handle),
-                              ],
-                            )
-                          : const Icon(Icons.drag_handle),
+                      trailing: _buildTrailingAction(key),
                     );
                   },
                 ).toList(),
@@ -110,5 +95,37 @@ class PlaybackPageSettingsPage extends GetView<IndexedSettingsController> {
         ],
       ),
     );
+  }
+
+  Widget _buildTrailingAction(String key) {
+    if (key == "contribution_rank") {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Obx(
+            () => Switch(
+              value: controller.contributionRankEnable.value,
+              onChanged: controller.setContributionRankEnable,
+            ),
+          ),
+          const Icon(Icons.drag_handle),
+        ],
+      );
+    }
+    if (key == "event_flow") {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Obx(
+            () => Switch(
+              value: controller.liveEventFlowEnable.value,
+              onChanged: controller.setLiveEventFlowEnable,
+            ),
+          ),
+          const Icon(Icons.drag_handle),
+        ],
+      );
+    }
+    return const Icon(Icons.drag_handle);
   }
 }

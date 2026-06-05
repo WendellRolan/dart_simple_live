@@ -159,23 +159,40 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     if (!settings.danmuDedupeEnable.value) {
       return false;
     }
-    final fingerprint = _buildDanmuFingerprint(msg);
+    final strictMode = settings.danmuDedupeStrictMode;
+    final fingerprint = _buildDanmuFingerprint(
+      msg,
+      includeUserName: !strictMode,
+    );
     if (fingerprint == null) {
       return false;
     }
-    final windowSize = settings.danmuDedupeWindow.value.clamp(1, 100);
-    final step = settings.danmuDedupeStep.value.clamp(1, 20);
+    final windowSize = settings.effectiveDanmuDedupeWindow;
     final duplicate = _recentDanmuCounts.containsKey(fingerprint);
     _recentDanmuFingerprints.addLast(fingerprint);
     _recentDanmuCounts[fingerprint] =
         (_recentDanmuCounts[fingerprint] ?? 0) + 1;
+    if (strictMode) {
+      _recentDanmuEventsSincePrune = 0;
+      _pruneRecentDanmuFingerprints(windowSize);
+      return duplicate;
+    }
+
+    final step = settings.danmuDedupeStep.value.clamp(1, 20).toInt();
     _recentDanmuEventsSincePrune += 1;
     final shouldPrune = _recentDanmuEventsSincePrune >= step ||
         _recentDanmuFingerprints.length > windowSize + step - 1;
     if (shouldPrune) {
       _recentDanmuEventsSincePrune = 0;
     }
-    while (shouldPrune && _recentDanmuFingerprints.length > windowSize) {
+    if (shouldPrune) {
+      _pruneRecentDanmuFingerprints(windowSize);
+    }
+    return duplicate;
+  }
+
+  void _pruneRecentDanmuFingerprints(int windowSize) {
+    while (_recentDanmuFingerprints.length > windowSize) {
       final removed = _recentDanmuFingerprints.removeFirst();
       final count = (_recentDanmuCounts[removed] ?? 0) - 1;
       if (count <= 0) {
@@ -184,14 +201,12 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
         _recentDanmuCounts[removed] = count;
       }
     }
-    return duplicate;
   }
 
-  String? _buildDanmuFingerprint(LiveMessage msg) {
-    final userName = _normalizeDanmuFingerprintPart(msg.userName);
-    if (userName.isEmpty) {
-      return null;
-    }
+  String? _buildDanmuFingerprint(
+    LiveMessage msg, {
+    required bool includeUserName,
+  }) {
     final parts = <String>[];
     final message = _normalizeDanmuFingerprintPart(msg.message);
     if (message.isNotEmpty) {
@@ -214,6 +229,13 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       }
     }
     if (parts.isEmpty) {
+      return null;
+    }
+    if (!includeUserName) {
+      return parts.join("\u0002");
+    }
+    final userName = _normalizeDanmuFingerprintPart(msg.userName);
+    if (userName.isEmpty) {
       return null;
     }
     return "$userName\u0001${parts.join("\u0002")}";

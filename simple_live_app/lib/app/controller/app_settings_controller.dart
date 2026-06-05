@@ -18,6 +18,15 @@ class AppSettingsController extends GetxController {
   static const String _keywordShieldPrefix = "keyword:";
   static const String _userShieldPrefix = "user:";
   static const String kGlobalUserShieldSiteId = "__all__";
+  static const int kDanmuDedupeModeUser = 0;
+  static const int kDanmuDedupeModeStrict = 1;
+  static const int kDanmuDedupeDefaultWindow = 10;
+  static const int kDanmuDedupeStrictMinWindow = 5;
+  static const int kDanmuDedupeMaxWindow = 100;
+  static const int kDanmuDedupeStrictWarnWindow = 20;
+  static const int kLiveEventFlowDefaultLimit = 100;
+  static const int kLiveEventFlowMinLimit = 100;
+  static const int kLiveEventFlowMaxLimit = 500;
 
   /// 缩放模式
   var scaleMode = 0.obs;
@@ -112,15 +121,33 @@ class AppSettingsController extends GetxController {
         .getValue(LocalStorageService.kAutoPipOnExit, false);
     playershowSuperChat.value = LocalStorageService.instance
         .getValue(LocalStorageService.kPlayerShowSuperChat, false);
+    liveEventFlowEnable.value = LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveEventFlowEnable,
+      false,
+    );
+    liveEventFlowLimit.value = _normalizeLiveEventFlowLimit(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveEventFlowLimit,
+        kLiveEventFlowDefaultLimit,
+      ),
+    );
     superChatSortDesc.value = LocalStorageService.instance
         .getValue(LocalStorageService.kSuperChatSortDesc, false);
     danmuDedupeEnable.value = LocalStorageService.instance.getValue(
       LocalStorageService.kDanmuDedupeEnable,
       false,
     );
-    danmuDedupeWindow.value = LocalStorageService.instance.getValue(
-      LocalStorageService.kDanmuDedupeWindow,
-      10,
+    danmuDedupeMode.value = _normalizeDanmuDedupeMode(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kDanmuDedupeMode,
+        kDanmuDedupeModeUser,
+      ),
+    );
+    danmuDedupeWindow.value = _normalizeDanmuDedupeWindow(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kDanmuDedupeWindow,
+        kDanmuDedupeDefaultWindow,
+      ),
     );
     danmuDedupeStep.value = LocalStorageService.instance.getValue(
       LocalStorageService.kDanmuDedupeStep,
@@ -1806,6 +1833,25 @@ class AppSettingsController extends GetxController {
         .setValue(LocalStorageService.kSuperChatSortDesc, e);
   }
 
+  var liveEventFlowEnable = false.obs;
+  void setLiveEventFlowEnable(bool e) {
+    liveEventFlowEnable.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kLiveEventFlowEnable, e);
+  }
+
+  var liveEventFlowLimit = kLiveEventFlowDefaultLimit.obs;
+  void setLiveEventFlowLimit(int e) {
+    final value = _normalizeLiveEventFlowLimit(e);
+    liveEventFlowLimit.value = value;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kLiveEventFlowLimit, value);
+  }
+
+  int _normalizeLiveEventFlowLimit(int value) {
+    return value.clamp(kLiveEventFlowMinLimit, kLiveEventFlowMaxLimit).toInt();
+  }
+
   var danmuDedupeEnable = false.obs;
   void setDanmuDedupeEnable(bool e) {
     danmuDedupeEnable.value = e;
@@ -1813,9 +1859,38 @@ class AppSettingsController extends GetxController {
         .setValue(LocalStorageService.kDanmuDedupeEnable, e);
   }
 
-  var danmuDedupeWindow = 10.obs;
+  var danmuDedupeMode = kDanmuDedupeModeUser.obs;
+  bool get danmuDedupeStrictMode =>
+      danmuDedupeMode.value == kDanmuDedupeModeStrict;
+  int get danmuDedupeWindowMin =>
+      danmuDedupeStrictMode ? kDanmuDedupeStrictMinWindow : 1;
+  int get effectiveDanmuDedupeWindow =>
+      _normalizeDanmuDedupeWindow(danmuDedupeWindow.value);
+
+  void setDanmuDedupeMode(int e) {
+    final value = _normalizeDanmuDedupeMode(e);
+    danmuDedupeMode.value = value;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kDanmuDedupeMode, value);
+    if (value == kDanmuDedupeModeStrict) {
+      setDanmuDedupeEnable(true);
+      setDanmuDedupeWindow(kDanmuDedupeDefaultWindow);
+    }
+  }
+
+  int _normalizeDanmuDedupeMode(int value) {
+    return value == kDanmuDedupeModeStrict
+        ? kDanmuDedupeModeStrict
+        : kDanmuDedupeModeUser;
+  }
+
+  int _normalizeDanmuDedupeWindow(int value) {
+    return value.clamp(danmuDedupeWindowMin, kDanmuDedupeMaxWindow).toInt();
+  }
+
+  var danmuDedupeWindow = kDanmuDedupeDefaultWindow.obs;
   void setDanmuDedupeWindow(int e) {
-    final value = e.clamp(1, 100).toInt();
+    final value = _normalizeDanmuDedupeWindow(e);
     danmuDedupeWindow.value = value;
     LocalStorageService.instance
         .setValue(LocalStorageService.kDanmuDedupeWindow, value);

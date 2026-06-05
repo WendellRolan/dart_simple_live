@@ -46,6 +46,11 @@ class Constant {
       title: "贡献榜/亲密榜",
       subtitle: "虎牙暂无贡献榜，直播间内会自动跳过",
     ),
+    "event_flow": LiveRoomTabItem(
+      iconData: Remix.pulse_line,
+      title: "动态",
+      subtitle: "展示短时间内重复较多的弹幕内容",
+    ),
     "settings": LiveRoomTabItem(
       iconData: Remix.settings_3_line,
       title: "设置",

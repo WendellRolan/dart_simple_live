@@ -57,12 +57,15 @@ class LocalStorageService extends GetxService {
   static const String kAutoFullScreen = "AutoFullScreen";
   static const String kAutoPipOnExit = "AutoPipOnExit";
   static const String kPlayerShowSuperChat = "PlayerShowSuperChat";
+  static const String kLiveEventFlowEnable = "LiveEventFlowEnable";
+  static const String kLiveEventFlowLimit = "LiveEventFlowLimit";
   static const String kPlayerVolume = "PlayerVolume";
   static const String kPIPHideDanmu = "PIPHideDanmu";
   static const String kPIPHideDanmuDefaultMigrated =
       "PIPHideDanmuDefaultMigrated";
   static const String kSuperChatSortDesc = "SuperChatSortDesc";
   static const String kDanmuDedupeEnable = "DanmuDedupeEnable";
+  static const String kDanmuDedupeMode = "DanmuDedupeMode";
   static const String kDanmuDedupeWindow = "DanmuDedupeWindow";
   static const String kDanmuDedupeStep = "DanmuDedupeStep";
   static const String kBilibiliCookie = "BilibiliCookie";
@@ -101,8 +104,7 @@ class LocalStorageService extends GetxService {
       "LiveSubtitleBackgroundEnable";
   static const String kLiveSubtitlePositionLocked =
       "LiveSubtitlePositionLocked";
-  static const String kLiveSubtitleStartupGuard =
-      "LiveSubtitleStartupGuard";
+  static const String kLiveSubtitleStartupGuard = "LiveSubtitleStartupGuard";
 
   late Box settingsBox;
   late Box<String> shieldBox;

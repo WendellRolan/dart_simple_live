@@ -138,41 +138,30 @@ TV 下载建议：
 - Windows / Android / Android TV 本地 Flutter：`3.41.9`
 - Linux 本地 WSL Flutter：`3.38.10`
 
-## 版本重点 2026.5.29
+## 版本重点 2026.6.4
 
-主 App 版本为 `v1.12.4`，TV 端版本为 `tv_1.7.5`；本地 release 目录对应 `release/v1.12.4` 和 `release/tv_1.7.5`。完整更新记录见 [Update.md](/Update.md)。
+主 App 版本为 `v1.12.5`，TV 端版本为 `tv_v1.7.6`；本地 release 目录对应 `release/v1.12.5` 和 `release/tv_v1.7.6`。完整更新记录见 [Update.md](/Update.md)。
 
 ### 主要变更
 
-- `update:` 关注页支持按开播状态或平台分组，特别关注星标持久化并在全部列表和所属分组置顶；主 App 和 TV 关注刷新并发默认改为 `8`，仍支持 `0 = 自动`。
-- `update:` issue #21：特别关注支持移动端开播提醒；桌面端和 TV 端暂不做通知。
-- `fix:` 主 App / TV App 版本号、更新 JSON 和本地 release tag 统一到 `v1.12.4` / `tv_1.7.5`，避免新包仍显示旧版本。
-- `fix:` WebDAV 和局域网同步恢复失败时不再一直转圈，连接失败会收起 loading 并给出明确原因；跨网络局域网同步会提示改用远程房间同步、WebDAV、VPN 或内网穿透。
-- `update:` 抖音房间名 / 主播名搜索接入账号 Cookie；Android/iOS/Windows/macOS 支持抖音网页登录，Linux 支持浏览器登录后手动粘贴 Cookie，TV 端不打开浏览器，通过手机或电脑端同步 Cookie。
-- `update:` 播放器新增当前房间临时静音、房间内一次性定时关闭、Android 退后台自动小窗开关；应用内返回只回主页，Home 键或系统手势退后台才触发自动小窗。
-- `fix:` 手动刷新直播间时同步刷新视频、弹幕、SC/头条和贡献榜；全平台热度增加 10 秒详情刷新兜底；聊天区在全屏/小窗返回后主动回到底部。
-- `fix:` 虎牙头条 pid 候选和日志增强，SC/头条按结束时间排序；修复 issue #22 中播放器浮层多条 SC 倒计时卡 1 秒不消失的问题。
-- `update:` issue #24：弹幕表情支持 B 站和抖音消息里的图片字段，主 App 聊天区、主 App 播放器浮层和 TV 播放器弹幕均可显示；小窗返回时尽量保留当前弹幕层，不再整层清空重刷。
-- `fix:` 其他设置里的同步服务地址在窄屏上改为短标签显示，完整地址保留在说明和编辑弹窗中。
-- `update:` 抖音表情解析按富文本片段处理，网页登录改为调用系统浏览器后粘贴 Cookie；TV 端继续通过手机或电脑同步 Cookie。
-- `update:` 播放页支持聊天 / SC 或头条 / 关注 / 设置自定义顺序，SC/头条支持按消失时间正序或倒序。
-- `update:` 重复弹幕过滤支持全端配置，默认关闭；同一用户在最近 N 条内重复发送相同内容时只显示一次。
-- `perf:` 重复弹幕过滤改为固定窗口队列 + 指纹计数表，查重平均 O(1)；指纹包含用户、文本、富文本片段和表情图片 URL，减少高弹幕量房间的误过滤和卡顿。
-- `fix:` 抖音 Cookie 登录框支持粘贴纯 Cookie、`Cookie: xxx` 或整段请求头，会自动提取完整 Cookie；已验证登录后的抖音请求头 Cookie 可用于主播/房间搜索。
-- `fix:` 抖音账号页 Cookie 摘要修复 GetX 灰色错误占位，并支持从 `sid_guard` 显示预计剩余有效期。
-- `fix:` WebDAV 恢复改为先下载备份 zip 到临时文件，并取消 isolate 解压，修复 isolate 捕获控制器 / DAVClient 导致的 `object is unsendable` 恢复失败。
-- `fix:` Windows 最大化后进入全屏增加全屏完成后的无边框二次收口，修复约 1 秒后窗口边框重新出现导致的边缘错位。
-- `fix:` Android 非全屏播放页恢复竖屏布局，右上角更多菜单避开虚拟导航栏，小窗返回全屏时不主动清空弹幕层。
-- `fix:` 抖音聊天表情按富文本顺序显示，避免只把图片追加到末尾；表情图片无法解析时保留文字占位，减少消息内容丢失。
-- `update:` TV 端也支持重复弹幕过滤和过滤窗口设置，默认关闭，逻辑与主 App 一致。
+- `update:` 桌面端直播间非全屏状态新增右侧栏折叠功能，方便多开时让播放器占用更多窗口空间；移动端、全屏和小窗布局保持原有习惯。
+- `update:` 重复弹幕过滤新增“刷屏严父”模式，忽略用户只按弹幕内容全局去重，主 App 全平台和 TV 端均生效。
+- `update:` 切到“刷屏严父”会自动开启重复过滤、窗口重置为默认 10 条并隐藏过滤步长；窗口可在 5 到 100 条内调整，超过 20 条时提示弹幕可能明显变少。
+- `update:` iOS 直播间普通状态支持左侧边缘滑动返回，并使用 Cupertino 风格路由转场；全屏状态仍保持返回时先退出全屏。
+- `update:` 完善抖音直播弹幕本地表情显示，内置 141 个抖音平台表情资源，并支持本地 `asset://` 表情资源渲染。
+- `fix:` TV 端关注列表改为分页加载，关注刷新加入冷却和任务互斥，同步关注列表改为批量写入，降低大量关注场景下的闪退风险。
+- `fix:` 删除关注页“读取中”分组，未知状态按未开播处理；关注页记住上次分组模式和选中分组。
+- `fix:` 搜索页改为按平台 `siteId` 记忆，避免配置同步或平台排序变化后选错平台。
+- `fix:` 排查 issue #37，1.12.4 Windows 白屏更像发布包 / 构建链或运行时依赖差异，源码侧未发现 Windows runner / `main.dart` 启动链路变更。
+- `release:` 更新 JSON 与本地 release 说明切换为正式 `v1.12.5` / `tv_v1.7.6`，移除预发布下载链接与 prerelease 标记。
 
 ### 验证状态
 
-- 主 App：`flutter pub get` 通过，`flutter analyze` 通过，`No issues found`。
-- TV App：`flutter pub get` 通过，`flutter analyze` 通过，`No issues found`。
-- 本地已构建：Windows、Android 三个 ABI、Linux zip/deb、Android TV 三个 ABI；macOS / iOS 由 GitHub Actions 手动 workflow 构建，用于节省 Actions 额度。
-- `pubspec.lock` 无改动。
-- 待真实设备继续验证：Android 自动小窗的 Home/返回键边界、关闭小窗后的预览保留、移动端开播提醒、WebDAV 恢复、跨设备 Cookie 同步、虎牙 SC/头条高频直播间表现、TV 弹幕表情显示效果。
+- 主 App：`flutter analyze` 通过，`No issues found`。
+- TV App：`flutter analyze` 通过，`No issues found`。
+- Core：`dart test test/live_repeated_danmu_summary_test.dart` 通过。
+- 本地 release 目录已准备：`release/v1.12.5`、`release/tv_v1.7.6`；macOS / iOS 按策略由 GitHub Actions 手动 workflow 构建。
+- 待真实设备继续验证：桌面多开右侧栏折叠、严父模式高弹幕量误过滤、TV 端大量关注列表、抖音本地表情显示效果。
 
 ## 后续目标
 

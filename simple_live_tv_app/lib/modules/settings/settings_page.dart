@@ -453,39 +453,83 @@ class SettingsPage extends GetView<SettingsController> {
         AppStyle.vGap24,
         Obx(
           () => SettingsItemWidget(
-            foucsNode: controller.danmakuDedupeWindowFoucsNode,
-            autofocus: controller.danmakuDedupeWindowFoucsNode.isFoucsed.value,
-            title: "过滤窗口",
+            foucsNode: controller.danmakuDedupeModeFoucsNode,
+            autofocus: controller.danmakuDedupeModeFoucsNode.isFoucsed.value,
+            title: "过滤模式",
             items: const {
-              5: "5条",
-              10: "10条",
-              20: "20条",
-              50: "50条",
+              AppSettingsController.kDanmuDedupeModeUser: "普通",
+              AppSettingsController.kDanmuDedupeModeStrict: "刷屏严父",
             },
-            value: AppSettingsController.instance.danmuDedupeWindow.value,
+            value: AppSettingsController.instance.danmuDedupeMode.value,
             onChanged: (e) {
-              AppSettingsController.instance.setDanmuDedupeWindow(e);
+              AppSettingsController.instance.setDanmuDedupeMode(e);
             },
           ),
         ),
         AppStyle.vGap24,
-        Obx(
-          () => SettingsItemWidget(
-            foucsNode: controller.danmakuDedupeStepFoucsNode,
-            autofocus: controller.danmakuDedupeStepFoucsNode.isFoucsed.value,
-            title: "过滤步长",
-            items: const {
-              1: "1",
-              2: "2",
-              3: "3",
-              5: "5",
-            },
-            value: AppSettingsController.instance.danmuDedupeStep.value,
+        Obx(() {
+          final strictMode =
+              AppSettingsController.instance.danmuDedupeStrictMode;
+          return SettingsItemWidget(
+            foucsNode: controller.danmakuDedupeWindowFoucsNode,
+            autofocus: controller.danmakuDedupeWindowFoucsNode.isFoucsed.value,
+            title: "过滤窗口",
+            items: strictMode
+                ? const {
+                    5: "5条",
+                    10: "10条",
+                    20: "20条",
+                    30: "30条",
+                    50: "50条",
+                    100: "100条",
+                  }
+                : const {
+                    1: "1条",
+                    5: "5条",
+                    10: "10条",
+                    20: "20条",
+                    30: "30条",
+                    50: "50条",
+                    100: "100条",
+                  },
+            value: AppSettingsController.instance.effectiveDanmuDedupeWindow,
             onChanged: (e) {
-              AppSettingsController.instance.setDanmuDedupeStep(e);
+              AppSettingsController.instance.setDanmuDedupeWindow(e);
+              if (AppSettingsController.instance.danmuDedupeStrictMode &&
+                  AppSettingsController.instance.danmuDedupeWindow.value >
+                      AppSettingsController.kDanmuDedupeStrictWarnWindow) {
+                SmartDialog.showToast("过滤窗口超过 20 条后，弹幕可能会明显变少");
+              }
             },
-          ),
-        ),
+          );
+        }),
+        Obx(() {
+          if (AppSettingsController.instance.danmuDedupeStrictMode) {
+            return const SizedBox.shrink();
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppStyle.vGap24,
+              SettingsItemWidget(
+                foucsNode: controller.danmakuDedupeStepFoucsNode,
+                autofocus:
+                    controller.danmakuDedupeStepFoucsNode.isFoucsed.value,
+                title: "过滤步长",
+                items: const {
+                  1: "1",
+                  2: "2",
+                  3: "3",
+                  5: "5",
+                },
+                value: AppSettingsController.instance.danmuDedupeStep.value,
+                onChanged: (e) {
+                  AppSettingsController.instance.setDanmuDedupeStep(e);
+                },
+              ),
+            ],
+          );
+        }),
       ],
     );
   }

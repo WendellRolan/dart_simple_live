@@ -31,6 +31,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 class LiveRoomPage extends GetView<LiveRoomController> {
   static const double _desktopSidePanelWidth = 300.0;
+  static const double _desktopSidePanelCollapsedWidth = 48.0;
 
   const LiveRoomPage({Key? key}) : super(key: key);
 
@@ -51,6 +52,20 @@ class LiveRoomPage extends GetView<LiveRoomController> {
       return safeInset;
     }
     return safeInset.clamp(0.0, 16.0).toDouble();
+  }
+
+  bool get _isDesktop {
+    return Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  }
+
+  double _landscapeSideWidth(double maxWidth) {
+    if (maxWidth <= _desktopSidePanelWidth) {
+      return 0.0;
+    }
+    if (_isDesktop && controller.desktopSidePanelCollapsed.value) {
+      return _desktopSidePanelCollapsedWidth;
+    }
+    return _desktopSidePanelWidth;
   }
 
   Widget _buildRoomTitleText() {
@@ -97,11 +112,16 @@ class LiveRoomPage extends GetView<LiveRoomController> {
   }
 
   Widget _buildLandscapeAppBarTitle(BuildContext context) {
+    if (_isDesktop) {
+      return Obx(() => _buildLandscapeAppBarTitleContent(context));
+    }
+    return _buildLandscapeAppBarTitleContent(context);
+  }
+
+  Widget _buildLandscapeAppBarTitleContent(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final sidePanelWidth = constraints.maxWidth > _desktopSidePanelWidth
-            ? _desktopSidePanelWidth
-            : 0.0;
+        final sidePanelWidth = _landscapeSideWidth(constraints.maxWidth);
         final playerWidth = constraints.maxWidth - sidePanelWidth;
         return SizedBox(
           height: kToolbarHeight,
@@ -147,6 +167,12 @@ class LiveRoomPage extends GetView<LiveRoomController> {
         );
       },
     );
+  }
+
+  bool _allowsNativePopGesture() {
+    return Platform.isIOS &&
+        !controller.fullScreenState.value &&
+        !controller.smallWindowState.value;
   }
 
   @override
@@ -252,9 +278,10 @@ class LiveRoomPage extends GetView<LiveRoomController> {
               : buildTabletUI(context),
         );
         return PopScope(
-          canPop: false,
+          canPop: _allowsNativePopGesture(),
           onPopInvokedWithResult: (didPop, result) async {
             if (didPop) {
+              await controller.cancelAutoPipOnLeave();
               return;
             }
             await _handleBack(context);
@@ -295,14 +322,10 @@ class LiveRoomPage extends GetView<LiveRoomController> {
               Expanded(
                 child: buildMediaPlayer(),
               ),
-              SizedBox(
-                width: _desktopSidePanelWidth,
-                child: Column(
-                  children: [
-                    buildUserProfile(context),
-                    buildMessageArea(),
-                  ],
-                ),
+              Obx(
+                () => _isDesktop && controller.desktopSidePanelCollapsed.value
+                    ? _buildCollapsedDesktopSidePanel(context)
+                    : _buildExpandedSidePanel(context),
               ),
             ],
           ),
@@ -378,6 +401,87 @@ class LiveRoomPage extends GetView<LiveRoomController> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildExpandedSidePanel(BuildContext context) {
+    final showCollapseAction = _isDesktop;
+    return SizedBox(
+      width: _desktopSidePanelWidth,
+      child: Column(
+        children: [
+          if (showCollapseAction)
+            Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                border: Border(
+                  left: BorderSide(
+                    color: Colors.grey.withAlpha(25),
+                  ),
+                  bottom: BorderSide(
+                    color: Colors.grey.withAlpha(25),
+                  ),
+                ),
+              ),
+              alignment: Alignment.centerLeft,
+              child: Tooltip(
+                message: "折叠聊天区",
+                child: IconButton(
+                  onPressed: controller.toggleDesktopSidePanel,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ),
+            ),
+          Expanded(
+            child: Column(
+              children: [
+                buildUserProfile(context),
+                buildMessageArea(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCollapsedDesktopSidePanel(BuildContext context) {
+    return SizedBox(
+      width: _desktopSidePanelCollapsedWidth,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          border: Border(
+            left: BorderSide(
+              color: Colors.grey.withAlpha(25),
+            ),
+          ),
+        ),
+        child: Column(
+          children: [
+            SizedBox(
+              height: 40,
+              child: Tooltip(
+                message: "展开聊天区",
+                child: IconButton(
+                  onPressed: controller.toggleDesktopSidePanel,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+              ),
+            ),
+            const Expanded(
+              child: Center(
+                child: Icon(
+                  Icons.chat_bubble_outline,
+                  size: 18,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -625,6 +729,21 @@ class LiveRoomPage extends GetView<LiveRoomController> {
               ),
             );
             break;
+          case "event_flow":
+            if (!AppSettingsController.instance.liveEventFlowEnable.value) {
+              return;
+            }
+            tabs.add(
+              Tab(
+                child: Text(
+                  controller.liveEventFlows.isNotEmpty
+                      ? "动态(${controller.liveEventFlows.length})"
+                      : "动态",
+                ),
+              ),
+            );
+            pages.add(buildLiveEventFlow());
+            break;
           case "settings":
             tabs.add(const Tab(text: "设置"));
             pages.add(buildSettings());
@@ -690,6 +809,41 @@ class LiveRoomPage extends GetView<LiveRoomController> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget buildLiveEventFlow() {
+    return KeepAliveWrapper(
+      child: Obx(() {
+        if (!AppSettingsController.instance.liveEventFlowEnable.value) {
+          return const AppEmptyWidget(message: "重点动态已关闭");
+        }
+        if (controller.liveEventFlows.isEmpty) {
+          return const AppEmptyWidget(message: "暂未捕捉到重复动态");
+        }
+        return ListView.separated(
+          padding: AppStyle.edgeInsetsA12,
+          itemCount: controller.liveEventFlows.length,
+          separatorBuilder: (_, i) => AppStyle.vGap8,
+          itemBuilder: (_, i) {
+            final item = controller.liveEventFlows[i];
+            return ListTile(
+              visualDensity: VisualDensity.compact,
+              contentPadding: AppStyle.edgeInsetsL16.copyWith(right: 12),
+              leading: const Icon(Remix.pulse_line),
+              title: Text(
+                item.text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Text(
+                "x${item.count}",
+                style: Get.textTheme.titleMedium,
+              ),
+            );
+          },
+        );
+      }),
     );
   }
 
@@ -908,8 +1062,39 @@ class LiveRoomPage extends GetView<LiveRoomController> {
               AppStyle.divider,
               Obx(
                 () => SettingsSwitch(
+                  title: "重点动态",
+                  subtitle: "汇总短时间内重复较多的弹幕内容",
+                  value:
+                      AppSettingsController.instance.liveEventFlowEnable.value,
+                  onChanged: (e) {
+                    AppSettingsController.instance.setLiveEventFlowEnable(e);
+                    if (!e) {
+                      controller.clearLiveEventFlow();
+                    }
+                  },
+                ),
+              ),
+              AppStyle.divider,
+              Obx(
+                () => SettingsNumber(
+                  title: "动态保留数量",
+                  subtitle: "控制动态页最多保留多少条摘要",
+                  value:
+                      AppSettingsController.instance.liveEventFlowLimit.value,
+                  min: AppSettingsController.kLiveEventFlowMinLimit,
+                  max: AppSettingsController.kLiveEventFlowMaxLimit,
+                  step: 50,
+                  onChanged:
+                      AppSettingsController.instance.setLiveEventFlowLimit,
+                ),
+              ),
+              AppStyle.divider,
+              Obx(
+                () => SettingsSwitch(
                   title: "重复弹幕过滤",
-                  subtitle: "同一用户在最近若干条内重复刷同一句时只显示一次",
+                  subtitle: AppSettingsController.instance.danmuDedupeStrictMode
+                      ? "刷屏严父：不同用户重复发同一句也只显示一次"
+                      : "普通：同一用户在最近若干条内重复发同一句只显示一次",
                   value: AppSettingsController.instance.danmuDedupeEnable.value,
                   onChanged: (e) {
                     AppSettingsController.instance.setDanmuDedupeEnable(e);
@@ -918,30 +1103,64 @@ class LiveRoomPage extends GetView<LiveRoomController> {
               ),
               AppStyle.divider,
               Obx(
-                () => SettingsNumber(
-                  title: "过滤窗口",
-                  subtitle: "默认 10 条；窗口越大越容易过滤刷屏",
-                  value: AppSettingsController.instance.danmuDedupeWindow.value,
-                  min: 1,
-                  max: 100,
+                () => SettingsMenu<int>(
+                  title: "过滤模式",
+                  subtitle: "刷屏严父会忽略用户，只按弹幕内容去重",
+                  value: AppSettingsController.instance.danmuDedupeMode.value,
+                  valueMap: const {
+                    AppSettingsController.kDanmuDedupeModeUser: "普通",
+                    AppSettingsController.kDanmuDedupeModeStrict: "刷屏严父",
+                  },
                   onChanged: (e) {
-                    AppSettingsController.instance.setDanmuDedupeWindow(e);
+                    AppSettingsController.instance.setDanmuDedupeMode(e);
                   },
                 ),
               ),
               AppStyle.divider,
-              Obx(
-                () => SettingsNumber(
-                  title: "过滤步长",
-                  subtitle: "默认 2；数值越大检查窗口移动越少",
-                  value: AppSettingsController.instance.danmuDedupeStep.value,
-                  min: 1,
-                  max: 20,
+              Obx(() {
+                final strictMode =
+                    AppSettingsController.instance.danmuDedupeStrictMode;
+                return SettingsNumber(
+                  title: "过滤窗口",
+                  subtitle: strictMode
+                      ? "严父默认 10 条；超过 20 条可能会让弹幕明显变少"
+                      : "默认 10 条；窗口越大越容易过滤刷屏",
+                  value: AppSettingsController.instance.danmuDedupeWindow.value,
+                  min: AppSettingsController.instance.danmuDedupeWindowMin,
+                  max: AppSettingsController.kDanmuDedupeMaxWindow,
                   onChanged: (e) {
-                    AppSettingsController.instance.setDanmuDedupeStep(e);
+                    AppSettingsController.instance.setDanmuDedupeWindow(e);
+                    if (AppSettingsController.instance.danmuDedupeStrictMode &&
+                        AppSettingsController.instance.danmuDedupeWindow.value >
+                            AppSettingsController
+                                .kDanmuDedupeStrictWarnWindow) {
+                      SmartDialog.showToast("过滤窗口超过 20 条后，弹幕可能会明显变少");
+                    }
                   },
-                ),
-              ),
+                );
+              }),
+              Obx(() {
+                if (AppSettingsController.instance.danmuDedupeStrictMode) {
+                  return const SizedBox.shrink();
+                }
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppStyle.divider,
+                    SettingsNumber(
+                      title: "过滤步长",
+                      subtitle: "默认 2；数值越大检查窗口移动越少",
+                      value:
+                          AppSettingsController.instance.danmuDedupeStep.value,
+                      min: 1,
+                      max: 20,
+                      onChanged: (e) {
+                        AppSettingsController.instance.setDanmuDedupeStep(e);
+                      },
+                    ),
+                  ],
+                );
+              }),
               if (controller.supportsContributionRank) ...[
                 AppStyle.divider,
                 Obx(
