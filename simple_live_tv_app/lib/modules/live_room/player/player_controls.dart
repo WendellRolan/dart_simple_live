@@ -663,6 +663,9 @@ void showFollowUser(LiveRoomController controller) {
       currentIndex = 0;
     }
   }
+  final followScrollController = ScrollController(
+    initialScrollOffset: currentIndex * 172.w,
+  );
 
   Utils.showSystemRightDialog(
     width: 800.w,
@@ -701,6 +704,7 @@ void showFollowUser(LiveRoomController controller) {
             children: [
               Obx(
                 () => ListView.separated(
+                  controller: followScrollController,
                   itemCount: FollowUserService.instance.livingList.length,
                   separatorBuilder: (context, index) => AppStyle.vGap32,
                   padding: AppStyle.edgeInsetsA40.copyWith(
@@ -737,6 +741,7 @@ void showFollowUser(LiveRoomController controller) {
       ],
     ),
   ).then((value) {
+    followScrollController.dispose();
     // 还原焦点
     controller.focusNode.requestFocus();
   });

@@ -1204,8 +1204,32 @@ class DouyinSite implements LiveSite {
 
   @override
   Future<bool> getLiveStatus({required String roomId}) async {
-    var result = await getRoomDetail(roomId: roomId);
-    return result.status;
+    await _throttleRoomDetailRequest();
+    try {
+      if (roomId.length <= 16) {
+        final data = await _getRoomDataByApi(roomId);
+        final roomList = data["data"];
+        if (roomList is List && roomList.isNotEmpty) {
+          final roomData = roomList.first;
+          return (asT<int?>(roomData["status"]) ?? 0) == 2;
+        }
+        return false;
+      }
+
+      final roomData = await _getRoomDataByRoomId(roomId);
+      final room = roomData["data"]?["room"];
+      if (room is! Map) {
+        return false;
+      }
+      final status = asT<int?>(room["status"]) ?? 0;
+      return status == 2;
+    } catch (e) {
+      if (e is CoreError && e.statusCode == 444) {
+        rethrow;
+      }
+      CoreLog.error(e);
+      return false;
+    }
   }
 
   @override

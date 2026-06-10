@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_tv_app/app/app_focus_node.dart';
 import 'package:simple_live_tv_app/app/app_style.dart';
@@ -27,6 +28,7 @@ class FollowUserPage extends StatelessWidget {
 
   void _toggleRoom(dynamic item) {
     if (item.liveStatus.value != 2) {
+      SmartDialog.showToast("当前状态不是直播中，请先刷新关注状态");
       return;
     }
     if (_selectedRoomKeys.contains(item.id)) {
@@ -47,6 +49,7 @@ class FollowUserPage extends StatelessWidget {
         .map(MultiRoomItem.fromFollow)
         .toList();
     if (selected.length < 2) {
+      SmartDialog.showToast("请至少选择 2 个直播中的主播");
       return;
     }
     AppNavigator.toMultiRoom(selected);
