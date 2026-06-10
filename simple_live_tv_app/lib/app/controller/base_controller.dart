@@ -68,15 +68,29 @@ class BasePageController<T> extends BaseController {
   var list = <T>[].obs;
   DateTime? _lastRefreshAt;
 
-  Future refreshData() async {
-    final now = DateTime.now();
+  bool get isRefreshCoolingDown {
     final lastRefreshAt = _lastRefreshAt;
-    if (lastRefreshAt != null &&
-        now.difference(lastRefreshAt) < refreshCooldown) {
-      SmartDialog.showToast("刷新太频繁，请稍后再试");
-      return;
+    return lastRefreshAt != null &&
+        DateTime.now().difference(lastRefreshAt) < refreshCooldown;
+  }
+
+  void showRefreshCooldownToast() {
+    SmartDialog.showToast("刷新太频繁，请稍后再试");
+  }
+
+  bool tryBeginRefresh({bool showToast = true}) {
+    if (isRefreshCoolingDown) {
+      if (showToast) {
+        showRefreshCooldownToast();
+      }
+      return false;
     }
-    _lastRefreshAt = now;
+    _lastRefreshAt = DateTime.now();
+    return true;
+  }
+
+  Future refreshData() async {
+    if (!tryBeginRefresh()) return;
     currentPage = 1;
     list.value = [];
     await loadData();

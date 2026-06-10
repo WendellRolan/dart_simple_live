@@ -4,6 +4,7 @@ import 'package:simple_live_tv_app/app/app_focus_node.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 class CategoryController extends BasePageController<AppLiveCategory> {
   var siteId = Constant.kBiliBili.obs;
@@ -15,33 +16,70 @@ class CategoryController extends BasePageController<AppLiveCategory> {
     super.onInit();
   }
 
-  void setSite(String id) {
-    siteId.value = id;
-    site = Sites.allSites[id]!;
-    refreshData();
+  Future<void> setSite(String id) async {
+    if (siteId.value == id) return;
+    if (loadding.value) {
+      SmartDialog.showToast("正在加载，请稍后再试");
+      return;
+    }
+    if (!tryBeginRefresh()) return;
+
+    final nextSite = Sites.allSites[id]!;
+    try {
+      loadding.value = true;
+      pageError.value = false;
+      pageEmpty.value = false;
+      notLogin.value = false;
+      pageLoadding.value = true;
+
+      final result = await nextSite.liveSite.getCategores();
+      final categories = result
+          .map((e) => AppLiveCategory.fromLiveCategory(e, nextSite))
+          .toList();
+
+      site = nextSite;
+      siteId.value = id;
+      currentPage = 2;
+      canLoadMore.value = false;
+      pageEmpty.value = categories.isEmpty;
+      list.value = categories;
+      if (scrollController.hasClients) {
+        scrollController.jumpTo(0);
+      }
+    } catch (e) {
+      handleError(e);
+    } finally {
+      loadding.value = false;
+      pageLoadding.value = false;
+    }
   }
 
   @override
   Future<List<AppLiveCategory>> getData(int page, int pageSize) async {
     var result = await site.liveSite.getCategores();
 
-    return result.map((e) => AppLiveCategory.fromLiveCategory(e)).toList();
+    return result
+        .map((e) => AppLiveCategory.fromLiveCategory(e, site))
+        .toList();
   }
 }
 
 class AppLiveCategory extends LiveCategory {
   var showAll = false.obs;
+  final Site site;
   final List<LiveSubCategoryExt> childrenExt;
   AppLiveCategory({
     required super.id,
     required super.name,
     required super.children,
+    required this.site,
   }) : childrenExt = children
             .map((e) => LiveSubCategoryExt(
                   id: e.id,
                   name: e.name,
                   parentId: e.parentId,
                   pic: e.pic,
+                  site: site,
                 ))
             .toList() {
     showAll.value = children.length < 19;
@@ -51,11 +89,12 @@ class AppLiveCategory extends LiveCategory {
 
   AppFocusNode moreFocusNode = AppFocusNode();
 
-  factory AppLiveCategory.fromLiveCategory(LiveCategory item) {
+  factory AppLiveCategory.fromLiveCategory(LiveCategory item, Site site) {
     return AppLiveCategory(
       children: item.children,
       id: item.id,
       name: item.name,
+      site: site,
     );
   }
 }
@@ -65,8 +104,10 @@ class LiveSubCategoryExt extends LiveSubCategory {
     required super.id,
     required super.name,
     required super.parentId,
+    required this.site,
     super.pic,
   });
 
+  final Site site;
   AppFocusNode focusNode = AppFocusNode();
 }
