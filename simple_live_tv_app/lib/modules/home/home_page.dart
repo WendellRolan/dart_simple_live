@@ -171,6 +171,13 @@ class HomePage extends GetView<HomeController> {
                       AppStyle.hGap16,
                       HighlightButton(
                         focusNode: AppFocusNode(),
+                        iconData: Icons.dashboard,
+                        text: "多屏同播",
+                        onTap: controller.toFollow,
+                      ),
+                      AppStyle.hGap32,
+                      HighlightButton(
+                        focusNode: AppFocusNode(),
                         iconData: Icons.settings,
                         text: "管理",
                         onTap: showManageDialog,

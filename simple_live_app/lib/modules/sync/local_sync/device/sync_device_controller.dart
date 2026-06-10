@@ -13,6 +13,8 @@ import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/douyin_account_service.dart';
 import 'package:simple_live_app/services/profile_backup_service.dart';
 import 'package:simple_live_app/services/sync_service.dart';
+import 'package:simple_live_app/widgets/sync_progress_dialog.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 
 class SyncDeviceController extends BaseController {
   final SyncClinet client;
@@ -25,22 +27,53 @@ class SyncDeviceController extends BaseController {
     required bool overlay,
     required String label,
     required Object? Function(T item) toJson,
-    required Future<bool> Function(String body, bool overlay) send,
+    required Future<bool> Function(
+      String body,
+      bool overlay,
+      Map<String, String> chunkParams,
+    ) send,
   }) async {
     final policy = BulkDataImportService.policyForCount(items.length);
     final chunkSize = policy.scale == BulkDataScale.normal
         ? items.length
         : policy.dbBatchSize;
+    final chunkTotal =
+        items.isEmpty ? 1 : ((items.length - 1) ~/ chunkSize) + 1;
     Log.i("本地发送$label：count=${items.length} scale=${policy.label}");
     if (items.isEmpty) {
-      await send(json.encode(const []), overlay);
+      SyncProgressDialog.update(SyncProgress(
+        stage: "发送$label",
+        current: 0,
+        total: 0,
+        message: "发送空列表",
+      ));
+      await send(json.encode(const []), overlay, const {
+        "chunkIndex": "1",
+        "chunkTotal": "1",
+        "itemStart": "0",
+        "itemEnd": "0",
+        "itemTotal": "0",
+      });
       return;
     }
     for (var start = 0; start < items.length; start += chunkSize) {
       final end = (start + chunkSize).clamp(0, items.length).toInt();
+      final chunkIndex = (start ~/ chunkSize) + 1;
       final chunk = items.sublist(start, end);
       final body = json.encode(chunk.map(toJson).toList());
-      await send(body, overlay && start == 0);
+      SyncProgressDialog.update(SyncProgress(
+        stage: "发送$label",
+        current: end,
+        total: items.length,
+        message: "发送第 $chunkIndex/$chunkTotal 段，$end/${items.length}",
+      ));
+      await send(body, overlay && start == 0, {
+        "chunkIndex": chunkIndex.toString(),
+        "chunkTotal": chunkTotal.toString(),
+        "itemStart": start.toString(),
+        "itemEnd": end.toString(),
+        "itemTotal": items.length.toString(),
+      });
       Log.i(
         "本地发送$label分段：${start + 1}-$end/${items.length} bytes=${body.length}",
       );
@@ -61,7 +94,7 @@ class SyncDeviceController extends BaseController {
   void syncFollowAndTag() async {
     try {
       var overlay = await showOverlayDialog();
-      SmartDialog.showLoading(msg: "同步中...");
+      SyncProgressDialog.show(const SyncProgress(stage: "准备同步关注"));
       var users = DBService.instance.getFollowList();
       var tags = DBService.instance.getFollowTagList();
       await _syncJsonChunks(
@@ -69,8 +102,13 @@ class SyncDeviceController extends BaseController {
         overlay: overlay,
         label: "关注",
         toJson: (item) => item.toJson(),
-        send: (body, chunkOverlay) {
-          return request.syncFollow(client, body, overlay: chunkOverlay);
+        send: (body, chunkOverlay, chunkParams) {
+          return request.syncFollow(
+            client,
+            body,
+            overlay: chunkOverlay,
+            extraQueryParameters: chunkParams,
+          );
         },
       );
       // 标签和关注必须同时同步
@@ -79,8 +117,13 @@ class SyncDeviceController extends BaseController {
         overlay: overlay,
         label: "标签",
         toJson: (item) => item.toJson(),
-        send: (body, chunkOverlay) {
-          return request.syncTag(client, body, overlay: chunkOverlay);
+        send: (body, chunkOverlay, chunkParams) {
+          return request.syncTag(
+            client,
+            body,
+            overlay: chunkOverlay,
+            extraQueryParameters: chunkParams,
+          );
         },
       );
       SmartDialog.showToast("已同步关注列表和标签");
@@ -88,14 +131,14 @@ class SyncDeviceController extends BaseController {
       SmartDialog.showToast("同步失败：${exceptionToString(e)}");
       Log.e("同步关注和标签失败：$e", StackTrace.current);
     } finally {
-      SmartDialog.dismiss();
+      SyncProgressDialog.dismiss();
     }
   }
 
   void syncProfile() async {
     try {
       var overlay = await showOverlayDialog();
-      SmartDialog.showLoading(msg: "同步中...");
+      SyncProgressDialog.show(const SyncProgress(stage: "同步配置包"));
       await request.syncProfile(
         client,
         ProfileBackupService.instance.exportProfileJson(),
@@ -106,22 +149,27 @@ class SyncDeviceController extends BaseController {
       SmartDialog.showToast("同步失败：${exceptionToString(e)}");
       Log.e("同步配置包失败：$e", StackTrace.current);
     } finally {
-      SmartDialog.dismiss();
+      SyncProgressDialog.dismiss();
     }
   }
 
   void syncHistory() async {
     try {
       var overlay = await showOverlayDialog();
-      SmartDialog.showLoading(msg: "同步中...");
+      SyncProgressDialog.show(const SyncProgress(stage: "准备同步历史"));
       var histores = DBService.instance.getHistores();
       await _syncJsonChunks(
         items: histores,
         overlay: overlay,
         label: "历史",
         toJson: (item) => item.toJson(),
-        send: (body, chunkOverlay) {
-          return request.syncHistory(client, body, overlay: chunkOverlay);
+        send: (body, chunkOverlay, chunkParams) {
+          return request.syncHistory(
+            client,
+            body,
+            overlay: chunkOverlay,
+            extraQueryParameters: chunkParams,
+          );
         },
       );
       SmartDialog.showToast("已同步历史记录");
@@ -129,22 +177,27 @@ class SyncDeviceController extends BaseController {
       SmartDialog.showToast("同步失败：${exceptionToString(e)}");
       Log.e("同步历史记录失败：$e", StackTrace.current);
     } finally {
-      SmartDialog.dismiss();
+      SyncProgressDialog.dismiss();
     }
   }
 
   void syncBlockedWord() async {
     try {
       var overlay = await showOverlayDialog();
-      SmartDialog.showLoading(msg: "同步中...");
+      SyncProgressDialog.show(const SyncProgress(stage: "准备同步屏蔽词"));
       var shieldList = AppSettingsController.instance.allShieldValues.toList();
       await _syncJsonChunks(
         items: shieldList,
         overlay: overlay,
         label: "屏蔽词",
         toJson: (item) => item,
-        send: (body, chunkOverlay) {
-          return request.syncBlockedWord(client, body, overlay: chunkOverlay);
+        send: (body, chunkOverlay, chunkParams) {
+          return request.syncBlockedWord(
+            client,
+            body,
+            overlay: chunkOverlay,
+            extraQueryParameters: chunkParams,
+          );
         },
       );
       SmartDialog.showToast("已同步屏蔽词");
@@ -152,7 +205,7 @@ class SyncDeviceController extends BaseController {
       SmartDialog.showToast("同步失败：${exceptionToString(e)}");
       Log.e("同步屏蔽词失败：$e", StackTrace.current);
     } finally {
-      SmartDialog.dismiss();
+      SyncProgressDialog.dismiss();
     }
   }
 
@@ -162,7 +215,7 @@ class SyncDeviceController extends BaseController {
         SmartDialog.showToast("未登录哔哩哔哩");
         return;
       }
-      SmartDialog.showLoading(msg: "同步中...");
+      SyncProgressDialog.show(const SyncProgress(stage: "同步哔哩哔哩账号"));
 
       await request.syncBiliAccount(
           client, BiliBiliAccountService.instance.cookie);
@@ -171,7 +224,7 @@ class SyncDeviceController extends BaseController {
       SmartDialog.showToast("同步失败：${exceptionToString(e)}");
       Log.e("同步哔哩哔哩账号失败：$e", StackTrace.current);
     } finally {
-      SmartDialog.dismiss();
+      SyncProgressDialog.dismiss();
     }
   }
 
@@ -181,7 +234,7 @@ class SyncDeviceController extends BaseController {
         SmartDialog.showToast("未配置抖音 Cookie");
         return;
       }
-      SmartDialog.showLoading(msg: "同步中...");
+      SyncProgressDialog.show(const SyncProgress(stage: "同步抖音账号"));
 
       await request.syncDouyinAccount(
           client, DouyinAccountService.instance.cookie);
@@ -190,7 +243,7 @@ class SyncDeviceController extends BaseController {
       SmartDialog.showToast("同步失败：${exceptionToString(e)}");
       Log.e("同步抖音账号失败：$e", StackTrace.current);
     } finally {
-      SmartDialog.dismiss();
+      SyncProgressDialog.dismiss();
     }
   }
 }

@@ -16,6 +16,8 @@ import 'package:simple_live_app/services/live_subtitle_service.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
 import 'package:simple_live_app/services/profile_backup_service.dart';
 import 'package:simple_live_app/services/signalr_service.dart';
+import 'package:simple_live_app/widgets/sync_progress_dialog.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 
 class OtherSettingsController extends BaseController {
   RxList<LogFileModel> logFiles = <LogFileModel>[].obs;
@@ -208,15 +210,19 @@ class OtherSettingsController extends BaseController {
           confirm: "覆盖",
           cancel: "不覆盖",
         );
+        SyncProgressDialog.show(const SyncProgress(stage: "正在导入配置包"));
         final summary = await ProfileBackupService.instance.importProfileJson(
           content,
           overwrite: overwrite,
+          onProgress: SyncProgressDialog.update,
         );
+        SyncProgressDialog.dismiss();
         SmartDialog.showToast("导入成功：${summary.message}");
         return;
       }
       SmartDialog.showToast("不支持的配置文件");
     } catch (e) {
+      SyncProgressDialog.dismiss();
       Log.logPrint(e);
       SmartDialog.showToast("导入失败:$e");
     }

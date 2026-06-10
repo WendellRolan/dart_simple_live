@@ -4,15 +4,14 @@ import 'dart:convert';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
-import 'package:simple_live_tv_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
 import 'package:simple_live_tv_app/app/event_bus.dart';
 import 'package:simple_live_tv_app/app/log.dart';
-import 'package:simple_live_tv_app/models/db/follow_user.dart';
-import 'package:simple_live_tv_app/models/db/history.dart';
 import 'package:simple_live_tv_app/services/bilibili_account_service.dart';
-import 'package:simple_live_tv_app/services/db_service.dart';
+import 'package:simple_live_tv_app/services/bulk_data_import_service.dart';
 import 'package:simple_live_tv_app/services/signalr_service.dart';
+import 'package:simple_live_tv_app/widgets/sync_progress_dialog.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 
 class SyncController extends BaseController {
   final SignalRService signalR = SignalRService();
@@ -107,116 +106,144 @@ class SyncController extends BaseController {
       },
     );
     _onFavoriteSubscription = signalR.onFavoriteStream.listen((data) {
-      onReceiveFavorite(data.$1, data.$2);
+      onReceiveFavorite(data);
     });
     _onHistorySubscription = signalR.onHistoryStream.listen((data) {
-      onReceiveHistory(data.$1, data.$2);
+      onReceiveHistory(data);
     });
     _onShieldWordSubscription = signalR.onShieldWordStream.listen((data) {
-      onReceiveShieldWord(data.$1, data.$2);
+      onReceiveShieldWord(data);
     });
     _onBiliAccountSubscription = signalR.onBiliAccountStream.listen((data) {
-      onReceiveBiliAccount(data.$1, data.$2);
+      onReceiveBiliAccount(data);
     });
   }
 
-  void onReceiveFavorite(bool overlay, String data) async {
+  SyncProgress _stageProgress(String stage, RoomSyncPayload payload) {
+    final total =
+        payload.itemTotal > 0 ? payload.itemTotal : payload.chunkTotal;
+    final current =
+        payload.itemTotal > 0 ? payload.itemEnd : payload.chunkIndex;
+    return SyncProgress(
+      stage: stage,
+      current: current,
+      total: total,
+      message: payload.chunkTotal > 1
+          ? "接收第 ${payload.chunkIndex}/${payload.chunkTotal} 段"
+          : stage,
+    );
+  }
+
+  SyncProgressCallback _wrapPayloadProgress(RoomSyncPayload payload) {
+    return (progress) {
+      if (payload.itemTotal <= 0) {
+        SyncProgressDialog.update(progress);
+        return;
+      }
+      final current = (payload.itemStart + progress.current)
+          .clamp(0, payload.itemTotal)
+          .toInt();
+      SyncProgressDialog.update(SyncProgress(
+        stage: progress.stage,
+        current: current,
+        total: payload.itemTotal,
+        message: "${progress.stage} $current/${payload.itemTotal}",
+      ));
+    };
+  }
+
+  void onReceiveFavorite(RoomSyncPayload payload) async {
     try {
-      var jsonBody = json.decode(data);
+      SyncProgressDialog.show(_stageProgress("接收关注", payload));
+      final stopwatch = Stopwatch()..start();
+      var jsonBody = json.decode(payload.content);
       if (jsonBody is! List) {
         throw const FormatException("关注列表格式不是数组");
       }
-      final users = <FollowUser>[];
-      for (var item in jsonBody) {
-        try {
-          if (item is Map) {
-            final user = FollowUser.fromJson(Map<String, dynamic>.from(item));
-            if (user.id.isNotEmpty &&
-                user.roomId.isNotEmpty &&
-                user.siteId.isNotEmpty) {
-              users.add(user);
-            }
-          }
-        } catch (e) {
-          Log.d("跳过异常关注项: $e");
-        }
+      final result = await BulkDataImportService.importFollowUsers(
+        jsonBody,
+        overwrite: payload.overlay,
+        onProgress: _wrapPayloadProgress(payload),
+      );
+      stopwatch.stop();
+      Log.i(
+        "房间同步关注完成：${result.logSummary} bytes=${payload.content.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
+      );
+      if (payload.isLastChunk) {
+        EventBus.instance.emit(Constant.kUpdateFollow, 0);
+        SmartDialog.showToast(
+            "已同步关注列表（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）");
+        SyncProgressDialog.dismiss();
       }
-      if (overlay) {
-        await DBService.instance.followBox.clear();
-      }
-      await DBService.instance.addFollows(users);
-      EventBus.instance.emit(Constant.kUpdateFollow, 0);
-      SmartDialog.showToast("已同步关注列表（${users.length} 条）");
     } catch (e) {
+      SyncProgressDialog.dismiss();
       SmartDialog.showToast("同步失败:$e");
       Log.logPrint(e);
     }
   }
 
-  void onReceiveHistory(bool overlay, String data) async {
+  void onReceiveHistory(RoomSyncPayload payload) async {
     try {
-      var jsonBody = json.decode(data);
+      SyncProgressDialog.show(_stageProgress("接收历史", payload));
+      final stopwatch = Stopwatch()..start();
+      var jsonBody = json.decode(payload.content);
       if (jsonBody is! List) {
         throw const FormatException("历史记录格式不是数组");
       }
-      final histories = <History>[];
-      for (var item in jsonBody) {
-        try {
-          if (item is Map) {
-            final history = History.fromJson(Map<String, dynamic>.from(item));
-            if (history.id.isNotEmpty &&
-                history.roomId.isNotEmpty &&
-                history.siteId.isNotEmpty) {
-              histories.add(history);
-            }
-          }
-        } catch (e) {
-          Log.d("跳过异常历史项: $e");
-        }
+      final result = await BulkDataImportService.importHistories(
+        jsonBody,
+        overwrite: payload.overlay,
+        onProgress: _wrapPayloadProgress(payload),
+      );
+      stopwatch.stop();
+      Log.i(
+        "房间同步历史完成：${result.logSummary} bytes=${payload.content.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
+      );
+      if (payload.isLastChunk) {
+        SmartDialog.showToast(
+            "已同步历史记录（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）");
+        EventBus.instance.emit(Constant.kUpdateHistory, 0);
+        SyncProgressDialog.dismiss();
       }
-      if (overlay) {
-        await DBService.instance.historyBox.clear();
-      }
-      for (var history in histories) {
-        if (DBService.instance.historyBox.containsKey(history.id)) {
-          var old = DBService.instance.historyBox.get(history.id);
-          //如果本地的更新时间比较新，就不更新
-          if (old!.updateTime.isAfter(history.updateTime)) {
-            continue;
-          }
-        }
-        await DBService.instance.addOrUpdateHistory(history);
-      }
-      SmartDialog.showToast('已同步历史记录');
-      EventBus.instance.emit(Constant.kUpdateHistory, 0);
     } catch (e) {
+      SyncProgressDialog.dismiss();
       SmartDialog.showToast("同步失败:$e");
       Log.logPrint(e);
     }
   }
 
-  void onReceiveShieldWord(bool overlay, String data) async {
+  void onReceiveShieldWord(RoomSyncPayload payload) async {
     try {
-      var jsonBody = json.decode(data);
+      SyncProgressDialog.show(_stageProgress("接收屏蔽词", payload));
+      final stopwatch = Stopwatch()..start();
+      var jsonBody = json.decode(payload.content);
       if (jsonBody is! List) {
         throw const FormatException("屏蔽词格式不是数组");
       }
-      if (overlay) {
-        await AppSettingsController.instance.clearShieldList();
+      final result = await BulkDataImportService.importShieldValues(
+        jsonBody,
+        overwrite: payload.overlay,
+        onProgress: _wrapPayloadProgress(payload),
+      );
+      stopwatch.stop();
+      Log.i(
+        "房间同步屏蔽词完成：${result.logSummary} bytes=${payload.content.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
+      );
+      if (payload.isLastChunk) {
+        SmartDialog.showToast(
+            "已同步屏蔽词（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）");
+        SyncProgressDialog.dismiss();
       }
-      for (var item in jsonBody) {
-        AppSettingsController.instance.importShieldValue(item.toString());
-      }
-      SmartDialog.showToast('已同步屏蔽词');
     } catch (e) {
+      SyncProgressDialog.dismiss();
       SmartDialog.showToast("同步失败:$e");
       Log.logPrint(e);
     }
   }
 
-  void onReceiveBiliAccount(bool overlay, String data) async {
+  void onReceiveBiliAccount(RoomSyncPayload payload) async {
     try {
-      var jsonBody = json.decode(data);
+      var jsonBody = json.decode(payload.content);
       if (jsonBody is! Map) {
         throw const FormatException("账号数据格式不是对象");
       }

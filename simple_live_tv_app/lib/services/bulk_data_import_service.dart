@@ -1,13 +1,11 @@
 import 'dart:async';
 
-import 'package:simple_live_app/app/controller/app_settings_controller.dart';
-import 'package:simple_live_app/app/log.dart';
-import 'package:simple_live_app/models/db/follow_user.dart';
-import 'package:simple_live_app/models/db/follow_user_tag.dart';
-import 'package:simple_live_app/models/db/history.dart';
-import 'package:simple_live_app/services/db_service.dart';
-import 'package:simple_live_app/services/local_storage_service.dart';
 import 'package:simple_live_core/simple_live_core.dart';
+import 'package:simple_live_tv_app/app/controller/app_settings_controller.dart';
+import 'package:simple_live_tv_app/app/log.dart';
+import 'package:simple_live_tv_app/models/db/follow_user.dart';
+import 'package:simple_live_tv_app/models/db/history.dart';
+import 'package:simple_live_tv_app/services/db_service.dart';
 
 enum BulkDataScale {
   normal,
@@ -100,8 +98,6 @@ class BulkDataImportService {
     );
   }
 
-  static bool isLargeDataCount(int count) => count > mediumThreshold;
-
   static Future<void> yieldIfNeeded(
     BulkDataPolicy policy,
     int processed,
@@ -117,7 +113,6 @@ class BulkDataImportService {
   static Future<BulkImportResult> importFollowUsers(
     dynamic rawUsers, {
     bool overwrite = false,
-    bool syncTagsFromUserField = false,
     SyncProgressCallback? onProgress,
   }) async {
     if (rawUsers is! List) {
@@ -170,13 +165,6 @@ class BulkDataImportService {
       await DBService.instance.followBox.clear();
     }
     await _putFollows(users, policy, onProgress: onProgress);
-    if (syncTagsFromUserField) {
-      await syncTagsFromFollowUsers(
-        users,
-        policy,
-        onProgress: onProgress,
-      );
-    }
     final result = BulkImportResult(
       total: rawUsers.length,
       imported: users.length,
@@ -184,108 +172,6 @@ class BulkDataImportService {
       policy: policy,
     );
     Log.i("批量导入关注完成：${result.logSummary}");
-    return result;
-  }
-
-  static Future<int> syncTagsFromFollowUsers(
-      Iterable<FollowUser> users, BulkDataPolicy policy,
-      {SyncProgressCallback? onProgress}) async {
-    final tagMap = {
-      for (final tag in DBService.instance.getFollowTagList()) tag.tag: tag,
-    };
-    final total = users.length;
-    var processed = 0;
-    for (final follow in users) {
-      processed++;
-      final tagName = follow.tag.trim().isEmpty ? "全部" : follow.tag.trim();
-      if (tagName == "全部") {
-        await yieldIfNeeded(policy, processed);
-        continue;
-      }
-      var tag = tagMap[tagName];
-      if (tag == null) {
-        tag = await DBService.instance.addFollowTag(tagName);
-        tagMap[tagName] = tag;
-      }
-      if (!tag.userId.contains(follow.id)) {
-        tag.userId.add(follow.id);
-      }
-      await yieldIfNeeded(policy, processed);
-      _notifyProgress(
-        onProgress,
-        stage: "同步标签",
-        current: processed,
-        total: total,
-        verb: "整理",
-      );
-    }
-    final values = tagMap.values.where((tag) => tag.tag != "全部").toList();
-    await _putTags(values, policy, onProgress: onProgress);
-    return values.length;
-  }
-
-  static Future<BulkImportResult> importFollowTags(
-    dynamic rawTags, {
-    bool overwrite = false,
-    SyncProgressCallback? onProgress,
-  }) async {
-    if (rawTags is! List) {
-      final policy = policyForCount(0);
-      return BulkImportResult(
-        total: 0,
-        imported: 0,
-        skipped: 0,
-        policy: policy,
-      );
-    }
-    final policy = policyForCount(rawTags.length);
-    onProgress?.call(SyncProgress(
-      stage: "导入标签",
-      current: 0,
-      total: rawTags.length,
-      message: "正在解析标签 0/${rawTags.length}",
-    ));
-    final tags = <FollowUserTag>[];
-    var skipped = 0;
-    var processed = 0;
-    for (final item in rawTags) {
-      processed++;
-      if (item is! Map) {
-        skipped++;
-        await yieldIfNeeded(policy, processed);
-        continue;
-      }
-      try {
-        final tag = FollowUserTag.fromJson(Map<String, dynamic>.from(item));
-        if (tag.id.isEmpty || tag.tag.isEmpty) {
-          skipped++;
-        } else {
-          tags.add(tag);
-        }
-      } catch (e) {
-        skipped++;
-        Log.d("跳过异常标签项: $e");
-      }
-      await yieldIfNeeded(policy, processed);
-      _notifyProgress(
-        onProgress,
-        stage: "导入标签",
-        current: processed,
-        total: rawTags.length,
-        verb: "解析",
-      );
-    }
-    if (overwrite) {
-      await DBService.instance.tagBox.clear();
-    }
-    await _putTags(tags, policy, onProgress: onProgress);
-    final result = BulkImportResult(
-      total: rawTags.length,
-      imported: tags.length,
-      skipped: skipped,
-      policy: policy,
-    );
-    Log.i("批量导入标签完成：${result.logSummary}");
     return result;
   }
 
@@ -417,8 +303,17 @@ class BulkDataImportService {
         verb: "整理",
       );
     }
-    await _putShieldValues(values, policy, onProgress: onProgress);
-    AppSettingsController.instance.refreshShieldData();
+    for (final value in values) {
+      AppSettingsController.instance.importShieldValue(value);
+    }
+    _notifyProgress(
+      onProgress,
+      stage: "写入屏蔽词",
+      current: values.length,
+      total: values.length,
+      verb: "写入",
+      force: true,
+    );
     final result = BulkImportResult(
       total: rawValues.length,
       imported: values.length,
@@ -430,8 +325,10 @@ class BulkDataImportService {
   }
 
   static Future<void> _putFollows(
-      Iterable<FollowUser> users, BulkDataPolicy policy,
-      {SyncProgressCallback? onProgress}) async {
+    Iterable<FollowUser> users,
+    BulkDataPolicy policy, {
+    SyncProgressCallback? onProgress,
+  }) async {
     final buffer = <String, FollowUser>{};
     final total = users.length;
     var written = 0;
@@ -466,46 +363,11 @@ class BulkDataImportService {
     }
   }
 
-  static Future<void> _putTags(
-      Iterable<FollowUserTag> tags, BulkDataPolicy policy,
-      {SyncProgressCallback? onProgress}) async {
-    final buffer = <String, FollowUserTag>{};
-    final total = tags.length;
-    var written = 0;
-    for (final tag in tags) {
-      buffer[tag.id] = tag;
-      if (buffer.length >= policy.dbBatchSize) {
-        await DBService.instance.tagBox.putAll(buffer);
-        written += buffer.length;
-        buffer.clear();
-        _notifyProgress(
-          onProgress,
-          stage: "写入标签",
-          current: written,
-          total: total,
-          verb: "写入",
-          force: true,
-        );
-        await Future<void>.delayed(Duration.zero);
-      }
-    }
-    if (buffer.isNotEmpty) {
-      await DBService.instance.tagBox.putAll(buffer);
-      written += buffer.length;
-      _notifyProgress(
-        onProgress,
-        stage: "写入标签",
-        current: written,
-        total: total,
-        verb: "写入",
-        force: true,
-      );
-    }
-  }
-
   static Future<void> _putHistories(
-      Iterable<History> histories, BulkDataPolicy policy,
-      {SyncProgressCallback? onProgress}) async {
+    Iterable<History> histories,
+    BulkDataPolicy policy, {
+    SyncProgressCallback? onProgress,
+  }) async {
     final buffer = <String, History>{};
     final total = histories.length;
     var written = 0;
@@ -532,43 +394,6 @@ class BulkDataImportService {
       _notifyProgress(
         onProgress,
         stage: "写入历史",
-        current: written,
-        total: total,
-        verb: "写入",
-        force: true,
-      );
-    }
-  }
-
-  static Future<void> _putShieldValues(
-      Iterable<String> values, BulkDataPolicy policy,
-      {SyncProgressCallback? onProgress}) async {
-    final buffer = <String, String>{};
-    final total = values.length;
-    var written = 0;
-    for (final value in values) {
-      buffer[value] = value;
-      if (buffer.length >= policy.dbBatchSize) {
-        await LocalStorageService.instance.shieldBox.putAll(buffer);
-        written += buffer.length;
-        buffer.clear();
-        _notifyProgress(
-          onProgress,
-          stage: "写入屏蔽词",
-          current: written,
-          total: total,
-          verb: "写入",
-          force: true,
-        );
-        await Future<void>.delayed(Duration.zero);
-      }
-    }
-    if (buffer.isNotEmpty) {
-      await LocalStorageService.instance.shieldBox.putAll(buffer);
-      written += buffer.length;
-      _notifyProgress(
-        onProgress,
-        stage: "写入屏蔽词",
         current: written,
         total: total,
         verb: "写入",

@@ -322,6 +322,31 @@ class SettingsPage extends GetView<SettingsController> {
             },
           ),
         ),
+        AppStyle.vGap24,
+        Obx(
+          () => SettingsItemWidget(
+            foucsNode: controller.updateFollowThreadFocusNode,
+            autofocus: controller.updateFollowThreadFocusNode.isFoucsed.value,
+            title: "更新线程数",
+            items: const {
+              0: "自动",
+              1: "1",
+              2: "2",
+              4: "4",
+              6: "6",
+              8: "8",
+              12: "12",
+              16: "16",
+              24: "24",
+              32: "32",
+            },
+            value:
+                AppSettingsController.instance.effectiveUpdateFollowThreadCount,
+            onChanged: (e) {
+              AppSettingsController.instance.setUpdateFollowThreadCount(e);
+            },
+          ),
+        ),
       ],
     );
   }

@@ -14,6 +14,7 @@ class SyncClientRequest {
     SyncClinet client,
     dynamic body, {
     bool overlay = false,
+    Map<String, String> extraQueryParameters = const {},
   }) async {
     var url = "http://${client.address}:${client.port}/sync/follow";
     var data = await HttpClient.instance.postJson(
@@ -21,6 +22,7 @@ class SyncClientRequest {
       data: body,
       queryParameters: {
         'overlay': overlay ? '1' : '0',
+        ...extraQueryParameters,
       },
     );
 
@@ -35,6 +37,7 @@ class SyncClientRequest {
     SyncClinet client,
     dynamic body, {
     bool overlay = false,
+    Map<String, String> extraQueryParameters = const {},
   }) async {
     var url = "http://${client.address}:${client.port}/sync/tag";
     var data = await HttpClient.instance.postJson(
@@ -42,6 +45,7 @@ class SyncClientRequest {
       data: body,
       queryParameters: {
         'overlay': overlay ? '1' : '0',
+        ...extraQueryParameters,
       },
     );
 
@@ -56,6 +60,7 @@ class SyncClientRequest {
     SyncClinet client,
     dynamic body, {
     bool overlay = false,
+    Map<String, String> extraQueryParameters = const {},
   }) async {
     var url = "http://${client.address}:${client.port}/sync/history";
     var data = await HttpClient.instance.postJson(
@@ -63,6 +68,7 @@ class SyncClientRequest {
       data: body,
       queryParameters: {
         'overlay': overlay ? '1' : '0',
+        ...extraQueryParameters,
       },
     );
 
@@ -77,6 +83,7 @@ class SyncClientRequest {
     SyncClinet client,
     dynamic body, {
     bool overlay = false,
+    Map<String, String> extraQueryParameters = const {},
   }) async {
     var url = "http://${client.address}:${client.port}/sync/blocked_word";
     var data = await HttpClient.instance.postJson(
@@ -84,6 +91,7 @@ class SyncClientRequest {
       data: body,
       queryParameters: {
         'overlay': overlay ? '1' : '0',
+        ...extraQueryParameters,
       },
     );
 

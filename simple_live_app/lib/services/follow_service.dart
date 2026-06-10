@@ -19,6 +19,7 @@ import 'package:simple_live_app/models/db/follow_user_tag.dart';
 import 'package:simple_live_app/services/bulk_data_import_service.dart';
 import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/live_notification_service.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 
 class FollowService extends GetxService {
   static const Duration updateStatusCooldown = Duration(seconds: 30);
@@ -52,6 +53,8 @@ class FollowService extends GetxService {
   final Set<String> _liveNotifyReadyIds = <String>{};
   int _updateGeneration = 0;
   DateTime? _lastUpdateStatusStartedAt;
+  DateTime? _douyinLimitedUntil;
+  int _douyinLimitGeneration = 0;
 
   @override
   void onInit() {
@@ -282,6 +285,11 @@ class FollowService extends GetxService {
     final previousStatus = item.liveStatus.value;
     final notifyReady = _liveNotifyReadyIds.contains(item.id);
     try {
+      if (_shouldSkipDouyinByLimit(item)) {
+        item.liveStatus.value = 0;
+        item.liveStartTime = null;
+        return;
+      }
       var site = Sites.allSites[item.siteId]!;
       // 先只查状态
       var isLiving = await site.liveSite.getLiveStatus(roomId: item.roomId);
@@ -313,10 +321,37 @@ class FollowService extends GetxService {
       if (generation != null && generation != _updateGeneration) {
         return;
       }
+      if (_isDouyinLimited(item, e)) {
+        _handleDouyinLimited(generation: generation);
+      }
       Log.logPrint(e);
       item.liveStatus.value = 0;
       item.liveStartTime = null;
     }
+  }
+
+  bool _shouldSkipDouyinByLimit(FollowUser item) {
+    if (item.siteId != Constant.kDouyin) {
+      return false;
+    }
+    final until = _douyinLimitedUntil;
+    return until != null && DateTime.now().isBefore(until);
+  }
+
+  bool _isDouyinLimited(FollowUser item, Object error) {
+    return item.siteId == Constant.kDouyin &&
+        error is CoreError &&
+        error.statusCode == 444;
+  }
+
+  void _handleDouyinLimited({int? generation}) {
+    _douyinLimitedUntil = DateTime.now().add(const Duration(minutes: 10));
+    if (generation != null && _douyinLimitGeneration == generation) {
+      return;
+    }
+    _douyinLimitGeneration = generation ?? _updateGeneration;
+    Log.w("抖音访问受限，本轮后续抖音关注刷新将跳过，10 分钟后再尝试");
+    SmartDialog.showToast("抖音访问受限，请稍后再试");
   }
 
   int compareFollowUsers(FollowUser a, FollowUser b) {

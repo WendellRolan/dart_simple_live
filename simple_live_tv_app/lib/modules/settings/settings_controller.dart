@@ -62,6 +62,7 @@ class SettingsController extends BaseController
 
   var autoUpdateFollowEnableFocusNode = AppFocusNode();
   var autoUpdateFollowDurationFocusNode = AppFocusNode();
+  var updateFollowThreadFocusNode = AppFocusNode();
   var multiRoomGapFocusNode = AppFocusNode();
 
   var bilibiliFoucsNode = AppFocusNode();

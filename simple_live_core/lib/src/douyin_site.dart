@@ -3,7 +3,6 @@ import 'dart:math';
 
 import 'package:simple_live_core/simple_live_core.dart';
 import 'package:simple_live_core/src/common/convert_helper.dart';
-import 'package:simple_live_core/src/common/core_error.dart';
 import 'package:simple_live_core/src/common/http_client.dart';
 import 'package:simple_live_core/src/scripts/douyin_sign.dart';
 
@@ -25,6 +24,7 @@ class DouyinSite implements LiveSite {
 
   static const String kDefaultAuthority = "live.douyin.com";
   static DateTime? _lastRoomDetailRequestAt;
+  static Future<void> _roomDetailThrottle = Future<void>.value();
   static const Duration _webCookieCacheTtl = Duration(minutes: 5);
   static final Map<String, String> _webCookieCache = <String, String>{};
   static final Map<String, DateTime> _webCookieCacheAt = <String, DateTime>{};
@@ -315,7 +315,7 @@ class DouyinSite implements LiveSite {
     const marker = r'\"categoryData\":';
     final markerIndex = html.indexOf(marker);
     if (markerIndex < 0) {
-      throw CoreError("鎶栭煶鍒嗙被鏁版嵁瑙ｆ瀽澶辫触");
+      throw CoreError("抖音分类数据解析失败");
     }
     final arrayStart = html.indexOf("[", markerIndex);
     if (arrayStart < 0) {
@@ -362,7 +362,25 @@ class DouyinSite implements LiveSite {
         }
       }
     }
-    throw CoreError("鎶栭煶鍒嗙被鏁版嵁瑙ｆ瀽澶辫触");
+    throw CoreError("抖音分类数据解析失败");
+  }
+
+  List _resolveCategoryRoomData(dynamic result) {
+    if (result is Map && result["status_code"] == 444) {
+      throw CoreError("", statusCode: 444);
+    }
+    if (result is! Map) {
+      throw CoreError("抖音分类接口返回异常");
+    }
+    final data = result["data"];
+    if (data is! Map) {
+      throw CoreError("抖音分类接口返回异常，可能已触发访问限制");
+    }
+    final rooms = data["data"];
+    if (rooms is! List) {
+      throw CoreError("抖音分类接口返回异常，可能已触发访问限制");
+    }
+    return rooms;
   }
 
   @override
@@ -408,9 +426,10 @@ class DouyinSite implements LiveSite {
       header: await getRequestHeaders(),
     );
 
-    var hasMore = (result["data"]["data"] as List).length >= 15;
+    final roomData = _resolveCategoryRoomData(result);
+    var hasMore = roomData.length >= 15;
     var items = <LiveRoomItem>[];
-    for (var item in result["data"]["data"]) {
+    for (var item in roomData) {
       var roomItem = LiveRoomItem(
         roomId: item["web_rid"],
         title: item["room"]["title"].toString(),
@@ -463,9 +482,10 @@ class DouyinSite implements LiveSite {
       header: await getRequestHeaders(),
     );
 
-    var hasMore = (result["data"]["data"] as List).length >= 15;
+    final roomData = _resolveCategoryRoomData(result);
+    var hasMore = roomData.length >= 15;
     var items = <LiveRoomItem>[];
-    for (var item in result["data"]["data"]) {
+    for (var item in roomData) {
       var roomItem = LiveRoomItem(
         roomId: item["web_rid"],
         title: item["room"]["title"].toString(),
@@ -505,16 +525,20 @@ class DouyinSite implements LiveSite {
   }
 
   Future<void> _throttleRoomDetailRequest() async {
-    final lastRequestAt = _lastRoomDetailRequestAt;
-    final now = DateTime.now();
-    if (lastRequestAt != null) {
-      final elapsed = now.difference(lastRequestAt);
-      const minInterval = Duration(milliseconds: 1200);
-      if (elapsed < minInterval) {
-        await Future.delayed(minInterval - elapsed);
+    final next = _roomDetailThrottle.then((_) async {
+      final lastRequestAt = _lastRoomDetailRequestAt;
+      final now = DateTime.now();
+      if (lastRequestAt != null) {
+        final elapsed = now.difference(lastRequestAt);
+        const minInterval = Duration(milliseconds: 1200);
+        if (elapsed < minInterval) {
+          await Future.delayed(minInterval - elapsed);
+        }
       }
-    }
-    _lastRoomDetailRequestAt = DateTime.now();
+      _lastRoomDetailRequestAt = DateTime.now();
+    });
+    _roomDetailThrottle = next.catchError((_) {});
+    await next;
   }
 
   /// 通过roomId获取直播间信息

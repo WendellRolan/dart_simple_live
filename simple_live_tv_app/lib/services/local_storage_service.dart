@@ -118,6 +118,9 @@ class LocalStorageService extends GetxService {
 
   /// 播放器缓冲区大小
   static const String kPlayerBufferSize = "PlayerBufferSize";
+  static const String kPlayerForceHttps = "PlayerForceHttps";
+  static const String kPlayerVolume = "PlayerVolume";
+  static const String kLogEnable = "LogEnable";
 
   /// 自动全屏
   static const String kAutoFullScreen = "AutoFullScreen";

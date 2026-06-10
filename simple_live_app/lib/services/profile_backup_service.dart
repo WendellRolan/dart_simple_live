@@ -11,6 +11,7 @@ import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/follow_service.dart';
 import 'package:simple_live_app/services/live_subtitle_service.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 
 class ProfileBackupService extends GetxService {
   static ProfileBackupService get instance => Get.find<ProfileBackupService>();
@@ -75,7 +76,9 @@ class ProfileBackupService extends GetxService {
     String content, {
     bool overwrite = false,
     ProfileImportOptions options = const ProfileImportOptions(),
+    SyncProgressCallback? onProgress,
   }) async {
+    onProgress?.call(const SyncProgress(stage: "解析配置包"));
     final decoded = jsonDecode(content);
     if (decoded is! Map) {
       throw const FormatException("不是 Simple Live 配置包");
@@ -88,6 +91,7 @@ class ProfileBackupService extends GetxService {
         decoded.cast<String, dynamic>(),
         overwrite: overwrite,
         options: options,
+        onProgress: onProgress,
       );
     }
     if (decoded["type"] == "simple_live") {
@@ -95,6 +99,7 @@ class ProfileBackupService extends GetxService {
         decoded.cast<String, dynamic>(),
         overwrite: overwrite,
         options: options,
+        onProgress: onProgress,
       );
     }
     if (_looksLikeLegacyDataFile(decoded)) {
@@ -102,6 +107,7 @@ class ProfileBackupService extends GetxService {
         decoded.cast<String, dynamic>(),
         overwrite: overwrite,
         options: options,
+        onProgress: onProgress,
       );
     }
     throw const FormatException("不是 Simple Live 配置包");
@@ -111,14 +117,20 @@ class ProfileBackupService extends GetxService {
     Map<String, dynamic> payload, {
     bool overwrite = false,
     ProfileImportOptions options = const ProfileImportOptions(),
+    SyncProgressCallback? onProgress,
   }) async {
     final summary = ProfileImportSummary();
     if (options.settings) {
+      onProgress?.call(const SyncProgress(stage: "导入设置"));
       await _importSettings(payload["config"], summary, overwrite);
     }
     if (options.shields) {
       await _importShields(
-          {"raw": _legacyShieldValues(payload["shield"])}, summary, overwrite);
+        {"raw": _legacyShieldValues(payload["shield"])},
+        summary,
+        overwrite,
+        onProgress,
+      );
     }
 
     if (options.settings || options.shields || options.shieldPresets) {
@@ -165,10 +177,17 @@ class ProfileBackupService extends GetxService {
     Map<String, dynamic> payload, {
     bool overwrite = false,
     ProfileImportOptions options = const ProfileImportOptions(),
+    SyncProgressCallback? onProgress,
   }) async {
     final summary = ProfileImportSummary();
     if (payload["data"] is List) {
-      await _importLegacyDataList(payload["data"], summary, overwrite, options);
+      await _importLegacyDataList(
+        payload["data"],
+        summary,
+        overwrite,
+        options,
+        onProgress,
+      );
     } else {
       if (options.follows) {
         await _importFollowUsers(
@@ -178,14 +197,16 @@ class ProfileBackupService extends GetxService {
               "favorites",
             ]),
             summary,
-            overwrite);
+            overwrite,
+            onProgress);
         await _importFollowTags(
             _readPayloadList(payload, [
               "followUserTags",
               "tags",
             ]),
             summary,
-            overwrite);
+            overwrite,
+            onProgress);
       }
       if (options.histories) {
         await _importHistories(
@@ -194,7 +215,8 @@ class ProfileBackupService extends GetxService {
               "history",
             ]),
             summary,
-            overwrite);
+            overwrite,
+            onProgress);
       }
     }
 
@@ -222,15 +244,23 @@ class ProfileBackupService extends GetxService {
     Map<String, dynamic> payload, {
     bool overwrite = false,
     ProfileImportOptions options = const ProfileImportOptions(),
+    SyncProgressCallback? onProgress,
   }) async {
     final summary = ProfileImportSummary();
     if (options.settings) {
+      onProgress?.call(const SyncProgress(stage: "导入设置"));
       await _importSettings(payload["settings"], summary, overwrite);
     }
     if (options.shields) {
-      await _importShields(payload["danmuShield"], summary, overwrite);
+      await _importShields(
+        payload["danmuShield"],
+        summary,
+        overwrite,
+        onProgress,
+      );
     }
     if (options.shieldPresets) {
+      onProgress?.call(const SyncProgress(stage: "导入屏蔽预设"));
       await _importShieldPresets(
         payload["shieldPresets"],
         summary,
@@ -245,14 +275,16 @@ class ProfileBackupService extends GetxService {
             "favorites",
           ]),
           summary,
-          overwrite);
+          overwrite,
+          onProgress);
       await _importFollowTags(
           _readPayloadList(payload, [
             "followUserTags",
             "tags",
           ]),
           summary,
-          overwrite);
+          overwrite,
+          onProgress);
     }
     if (options.histories) {
       await _importHistories(
@@ -261,7 +293,8 @@ class ProfileBackupService extends GetxService {
             "history",
           ]),
           summary,
-          overwrite);
+          overwrite,
+          onProgress);
     }
 
     if (options.settings || options.shields || options.shieldPresets) {
@@ -361,6 +394,7 @@ class ProfileBackupService extends GetxService {
     dynamic rawShield,
     ProfileImportSummary summary,
     bool overwrite,
+    SyncProgressCallback? onProgress,
   ) async {
     if (overwrite) {
       await AppSettingsControllerSafe.clearShieldValues();
@@ -371,6 +405,7 @@ class ProfileBackupService extends GetxService {
         final result = await BulkDataImportService.importShieldValues(
           rawValues,
           overwrite: false,
+          onProgress: onProgress,
         );
         summary.shields += result.imported;
         summary.skipped += result.skipped;
@@ -435,10 +470,12 @@ class ProfileBackupService extends GetxService {
     dynamic rawUsers,
     ProfileImportSummary summary,
     bool overwrite,
+    SyncProgressCallback? onProgress,
   ) async {
     final result = await BulkDataImportService.importFollowUsers(
       rawUsers,
       overwrite: overwrite,
+      onProgress: onProgress,
     );
     summary.followUsers += result.imported;
     summary.skipped += result.skipped;
@@ -448,10 +485,12 @@ class ProfileBackupService extends GetxService {
     dynamic rawTags,
     ProfileImportSummary summary,
     bool overwrite,
+    SyncProgressCallback? onProgress,
   ) async {
     final result = await BulkDataImportService.importFollowTags(
       rawTags,
       overwrite: overwrite,
+      onProgress: onProgress,
     );
     summary.followTags += result.imported;
     summary.skipped += result.skipped;
@@ -461,10 +500,12 @@ class ProfileBackupService extends GetxService {
     dynamic rawHistories,
     ProfileImportSummary summary,
     bool overwrite,
+    SyncProgressCallback? onProgress,
   ) async {
     final result = await BulkDataImportService.importHistories(
       rawHistories,
       overwrite: overwrite,
+      onProgress: onProgress,
     );
     summary.histories += result.imported;
     summary.skipped += result.skipped;
@@ -488,6 +529,7 @@ class ProfileBackupService extends GetxService {
     ProfileImportSummary summary,
     bool overwrite,
     ProfileImportOptions options,
+    SyncProgressCallback? onProgress,
   ) async {
     if (rawList is! List || rawList.isEmpty) {
       return;
@@ -496,25 +538,25 @@ class ProfileBackupService extends GetxService {
     if (firstMap != null) {
       if (firstMap.containsKey("userId") || firstMap.containsKey("tag")) {
         if (options.follows) {
-          await _importFollowTags(rawList, summary, overwrite);
+          await _importFollowTags(rawList, summary, overwrite, onProgress);
         }
         return;
       }
       if (firstMap.containsKey("updateTime")) {
         if (options.histories) {
-          await _importHistories(rawList, summary, overwrite);
+          await _importHistories(rawList, summary, overwrite, onProgress);
         }
         return;
       }
       if (firstMap.containsKey("roomId") || firstMap.containsKey("siteId")) {
         if (options.follows) {
-          await _importFollowUsers(rawList, summary, overwrite);
+          await _importFollowUsers(rawList, summary, overwrite, onProgress);
         }
         return;
       }
     }
     if (options.shields && rawList.every((item) => item is String)) {
-      await _importShields({"raw": rawList}, summary, overwrite);
+      await _importShields({"raw": rawList}, summary, overwrite, onProgress);
     }
   }
 

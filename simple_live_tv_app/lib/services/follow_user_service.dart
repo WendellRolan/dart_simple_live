@@ -11,9 +11,11 @@ import 'package:simple_live_tv_app/app/sites.dart';
 import 'package:simple_live_tv_app/app/utils.dart';
 import 'package:simple_live_tv_app/models/db/follow_user.dart';
 import 'package:simple_live_tv_app/services/db_service.dart';
+import 'package:simple_live_core/simple_live_core.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 class FollowUserService extends BasePageController<FollowUser> {
-  static const Duration updateStatusCooldown = Duration(seconds: 30);
+  static const Duration updateStatusCooldown = Duration(seconds: 10);
   static FollowUserService get instance => Get.find<FollowUserService>();
   StreamSubscription<dynamic>? subscription;
 
@@ -24,6 +26,8 @@ class FollowUserService extends BasePageController<FollowUser> {
   int _updateGeneration = 0;
   DateTime? _lastUpdateStatusStartedAt;
   bool _forceNextStatusRefresh = false;
+  DateTime? _douyinLimitedUntil;
+  int _douyinLimitGeneration = 0;
 
   FollowUserService() {
     pageSize = 60;
@@ -114,11 +118,15 @@ class FollowUserService extends BasePageController<FollowUser> {
     livingList.assignAll(allList.where((x) => x.liveStatus.value == 2));
   }
 
-  /// 获取最优并发数
-  /// 后台按关注规模自动控制，不再读取用户配置，避免超大关注列表刷崩。
+  /// 获取最优并发数。0 表示自动；手动值用于兼容需要主动降载的 TV 场景。
   int _getConcurrency(int total) {
     if (total <= 0) {
       return 1;
+    }
+    final manual =
+        AppSettingsController.instance.effectiveUpdateFollowThreadCount;
+    if (manual > 0) {
+      return manual.clamp(1, total).toInt();
     }
     if (total <= 300) {
       return total < 48 ? total : 48;
@@ -133,6 +141,12 @@ class FollowUserService extends BasePageController<FollowUser> {
       return 12;
     }
     return 8;
+  }
+
+  String _getConcurrencyMode() {
+    final manual =
+        AppSettingsController.instance.effectiveUpdateFollowThreadCount;
+    return manual > 0 ? "手动($manual)" : "自动";
   }
 
   /// 按平台交错排列，避免单一平台阻塞
@@ -183,7 +197,7 @@ class FollowUserService extends BasePageController<FollowUser> {
     var concurrency = _getConcurrency(followList.length);
 
     Log.logPrint(
-      "开始更新关注状态，并发数: $concurrency，总数: ${followList.length}",
+      "开始更新关注状态，并发数: $concurrency，模式: ${_getConcurrencyMode()}，总数: ${followList.length}",
     );
 
     var taskQueue = Queue<FollowUser>.from(_interleaveByPlatform(followList));
@@ -215,6 +229,10 @@ class FollowUserService extends BasePageController<FollowUser> {
 
   Future updateLiveStatus(FollowUser item, {int? generation}) async {
     try {
+      if (_shouldSkipDouyinByLimit(item)) {
+        item.liveStatus.value = 0;
+        return;
+      }
       var site = Sites.allSites[item.siteId]!;
       final isLiving = await site.liveSite.getLiveStatus(roomId: item.roomId);
       if (generation != null && generation != _updateGeneration) {
@@ -225,8 +243,35 @@ class FollowUserService extends BasePageController<FollowUser> {
       if (generation != null && generation != _updateGeneration) {
         return;
       }
+      if (_isDouyinLimited(item, e)) {
+        _handleDouyinLimited(generation: generation);
+      }
       Log.logPrint(e);
     }
+  }
+
+  bool _shouldSkipDouyinByLimit(FollowUser item) {
+    if (item.siteId != Constant.kDouyin) {
+      return false;
+    }
+    final until = _douyinLimitedUntil;
+    return until != null && DateTime.now().isBefore(until);
+  }
+
+  bool _isDouyinLimited(FollowUser item, Object error) {
+    return item.siteId == Constant.kDouyin &&
+        error is CoreError &&
+        error.statusCode == 444;
+  }
+
+  void _handleDouyinLimited({int? generation}) {
+    _douyinLimitedUntil = DateTime.now().add(const Duration(minutes: 10));
+    if (generation != null && _douyinLimitGeneration == generation) {
+      return;
+    }
+    _douyinLimitGeneration = generation ?? _updateGeneration;
+    Log.w("抖音访问受限，本轮后续抖音关注刷新将跳过，10 分钟后再尝试");
+    SmartDialog.showToast("抖音访问受限，请稍后再试");
   }
 
   void removeItem(FollowUser item, {bool refresh = true}) async {

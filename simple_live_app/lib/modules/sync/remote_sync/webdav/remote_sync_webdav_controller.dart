@@ -19,6 +19,8 @@ import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/bulk_data_import_service.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
 import 'package:simple_live_app/services/profile_backup_service.dart';
+import 'package:simple_live_app/widgets/sync_progress_dialog.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 
 Archive _decodeWebDavBackupArchive(List<int> data) {
   final zipDecoder = ZipDecoder();
@@ -138,10 +140,11 @@ class RemoteSyncWebDAVController extends BaseController {
 
   // webDAV上传到云端
   Future<void> doWebDAVUpload() async {
-    SmartDialog.showLoading(msg: "正在上传到云端");
+    SyncProgressDialog.show(const SyncProgress(stage: "正在打包备份"));
     try {
       final value = await _backupData();
       if (value.isNotEmpty) {
+        SyncProgressDialog.update(const SyncProgress(stage: "正在上传到云端"));
         var result = await davClient.backup(Uint8List.fromList(value));
         if (result) {
           SmartDialog.showToast("上传成功");
@@ -161,7 +164,7 @@ class RemoteSyncWebDAVController extends BaseController {
       Log.e("WebDAV 上传失败：$e", StackTrace.current);
       SmartDialog.showToast("上传失败：${exceptionToString(e)}");
     } finally {
-      SmartDialog.dismiss();
+      SyncProgressDialog.dismiss();
     }
   }
 
@@ -231,7 +234,7 @@ class RemoteSyncWebDAVController extends BaseController {
 
   // webDAV恢复到本地
   void doWebDAVRecovery() async {
-    SmartDialog.showLoading(msg: "正在恢复到本地");
+    SyncProgressDialog.show(const SyncProgress(stage: "正在下载备份"));
     try {
       final tempDir = await getTemporaryDirectory();
       final downloadPath = join(
@@ -246,6 +249,7 @@ class RemoteSyncWebDAVController extends BaseController {
       if (!downloadFile.existsSync() || downloadFile.lengthSync() <= 0) {
         throw const FormatException("WebDAV 备份文件下载失败");
       }
+      SyncProgressDialog.update(const SyncProgress(stage: "正在解压备份"));
       final data = await downloadFile.readAsBytes();
       final archive = _decodeWebDavBackupArchive(data);
       final profileFile = archive
@@ -263,6 +267,7 @@ class RemoteSyncWebDAVController extends BaseController {
               shields: isSyncBlockWord.value,
               shieldPresets: isSyncBlockWord.value,
             ),
+            onProgress: SyncProgressDialog.update,
           );
           Log.i("已同步完整配置包：${summary.message}");
         } catch (e) {
@@ -271,12 +276,12 @@ class RemoteSyncWebDAVController extends BaseController {
         }
         for (ArchiveFile file in archive) {
           if (file.name == _userBilibiliAccountJsonName) {
-            await _recovery(file);
+            await _recovery(file, onProgress: SyncProgressDialog.update);
           }
         }
       } else {
         for (ArchiveFile file in archive) {
-          await _recovery(file);
+          await _recovery(file, onProgress: SyncProgressDialog.update);
         }
       }
       SmartDialog.showToast('同步完成');
@@ -289,7 +294,7 @@ class RemoteSyncWebDAVController extends BaseController {
       Log.e("WebDAV 恢复失败：$e", StackTrace.current);
       SmartDialog.showToast("恢复失败：${exceptionToString(e)}");
     } finally {
-      SmartDialog.dismiss();
+      SyncProgressDialog.dismiss();
       try {
         final tempDir = await getTemporaryDirectory();
         final downloadFile =
@@ -301,7 +306,10 @@ class RemoteSyncWebDAVController extends BaseController {
     }
   }
 
-  Future<void> _recovery(ArchiveFile file) async {
+  Future<void> _recovery(
+    ArchiveFile file, {
+    SyncProgressCallback? onProgress,
+  }) async {
     if (file.isFile && file.name.endsWith('.json')) {
       var jsonString = utf8.decode(file.content);
       var jsonData = json.decode(jsonString)['data'];
@@ -311,6 +319,7 @@ class RemoteSyncWebDAVController extends BaseController {
           final result = await BulkDataImportService.importFollowUsers(
             jsonData,
             overwrite: true,
+            onProgress: onProgress,
           );
           EventBus.instance.emit(Constant.kUpdateFollow, 0);
           Log.i('已同步关注用户列表：${result.logSummary}');
@@ -319,7 +328,10 @@ class RemoteSyncWebDAVController extends BaseController {
         }
       } else if (file.name == _userHistoriesJsonName && isSyncHistories.value) {
         try {
-          final result = await BulkDataImportService.importHistories(jsonData);
+          final result = await BulkDataImportService.importHistories(
+            jsonData,
+            onProgress: onProgress,
+          );
           EventBus.instance.emit(Constant.kUpdateHistory, 0);
           Log.i('已同步用户观看历史记录：${result.logSummary}');
         } catch (e) {
@@ -330,6 +342,7 @@ class RemoteSyncWebDAVController extends BaseController {
         try {
           final result = await BulkDataImportService.importShieldValues(
             jsonData,
+            onProgress: onProgress,
           );
           Log.i('已同步用户屏蔽词：${result.logSummary}');
         } catch (e) {
@@ -359,6 +372,7 @@ class RemoteSyncWebDAVController extends BaseController {
           final result = await BulkDataImportService.importFollowTags(
             jsonData,
             overwrite: true,
+            onProgress: onProgress,
           );
           EventBus.instance.emit(Constant.kUpdateFollow, 0);
           Log.i('已同步用户自定义标签：${result.logSummary}');

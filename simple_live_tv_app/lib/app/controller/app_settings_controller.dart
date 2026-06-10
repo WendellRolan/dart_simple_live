@@ -29,6 +29,18 @@ class AppSettingsController extends GetxController {
   static const int kMultiRoomDefaultGap = 8;
   static const int kMultiRoomMinGap = 0;
   static const int kMultiRoomMaxGap = 24;
+  static const List<int> kUpdateFollowThreadOptions = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    8,
+    12,
+    16,
+    24,
+    32,
+  ];
 
   /// 缩放模式
   var scaleMode = 0.obs;
@@ -186,8 +198,12 @@ class AppSettingsController extends GetxController {
     autoUpdateFollowDuration.value = LocalStorageService.instance
         .getValue(LocalStorageService.kUpdateFollowDuration, 10);
 
-    updateFollowThreadCount.value = LocalStorageService.instance
-        .getValue(LocalStorageService.kUpdateFollowThreadCount, 8);
+    updateFollowThreadCount.value = _normalizeUpdateFollowThreadCount(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kUpdateFollowThreadCount,
+        0,
+      ),
+    );
     multiRoomGap.value = _normalizeMultiRoomGap(
       LocalStorageService.instance.getValue(
         LocalStorageService.kMultiRoomGap,
@@ -572,11 +588,21 @@ class AppSettingsController extends GetxController {
         .setValue(LocalStorageService.kUpdateFollowDuration, e);
   }
 
-  var updateFollowThreadCount = 8.obs;
+  var updateFollowThreadCount = 0.obs;
+  int get effectiveUpdateFollowThreadCount =>
+      _normalizeUpdateFollowThreadCount(updateFollowThreadCount.value);
   void setUpdateFollowThreadCount(int e) {
-    updateFollowThreadCount.value = e;
+    final value = _normalizeUpdateFollowThreadCount(e);
+    updateFollowThreadCount.value = value;
     LocalStorageService.instance
-        .setValue(LocalStorageService.kUpdateFollowThreadCount, e);
+        .setValue(LocalStorageService.kUpdateFollowThreadCount, value);
+  }
+
+  int _normalizeUpdateFollowThreadCount(int value) {
+    if (kUpdateFollowThreadOptions.contains(value)) {
+      return value;
+    }
+    return 0;
   }
 
   var multiRoomGap = kMultiRoomDefaultGap.obs;

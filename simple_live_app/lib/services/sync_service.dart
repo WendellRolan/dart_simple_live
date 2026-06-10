@@ -13,6 +13,8 @@ import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/bulk_data_import_service.dart';
 import 'package:simple_live_app/services/douyin_account_service.dart';
 import 'package:simple_live_app/services/profile_backup_service.dart';
+import 'package:simple_live_app/widgets/sync_progress_dialog.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 import 'package:udp/udp.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -250,8 +252,10 @@ class SyncService extends GetxService {
     try {
       var overlay =
           int.parse(request.requestedUri.queryParameters['overlay'] ?? '0');
+      final chunk = _readSyncChunk(request);
 
       var body = await request.readAsString();
+      SyncProgressDialog.show(_stageProgress("接收关注", chunk));
       final stopwatch = Stopwatch()..start();
       var jsonBody = json.decode(body);
       if (jsonBody is! List) {
@@ -260,19 +264,26 @@ class SyncService extends GetxService {
       final result = await BulkDataImportService.importFollowUsers(
         jsonBody,
         overwrite: overlay == 1,
+        onProgress: _wrapChunkProgress(chunk),
       );
       stopwatch.stop();
       Log.i(
         "本地同步关注完成：${result.logSummary} bytes=${body.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
       );
 
-      SmartDialog.showToast('已同步关注用户列表（${result.imported} 条）');
-      EventBus.instance.emit(Constant.kUpdateFollow, 0);
+      if (chunk.isLastChunk) {
+        SmartDialog.showToast(
+          '已同步关注用户列表（${chunk.itemTotal > 0 ? chunk.itemTotal : result.imported} 条）',
+        );
+        EventBus.instance.emit(Constant.kUpdateFollow, 0);
+        SyncProgressDialog.dismiss();
+      }
       return toJsonResponse({
         'status': true,
         'message': 'success',
       });
     } catch (e) {
+      SyncProgressDialog.dismiss();
       return toJsonResponse({
         'status': false,
         'message': e.toString(),
@@ -286,8 +297,10 @@ class SyncService extends GetxService {
     try {
       var overlay =
           int.parse(request.requestedUri.queryParameters['overlay'] ?? '0');
+      final chunk = _readSyncChunk(request);
 
       var body = await request.readAsString();
+      SyncProgressDialog.show(_stageProgress("接收标签", chunk));
       final stopwatch = Stopwatch()..start();
       var jsonBody = json.decode(body);
       if (jsonBody is! List) {
@@ -296,19 +309,26 @@ class SyncService extends GetxService {
       final result = await BulkDataImportService.importFollowTags(
         jsonBody,
         overwrite: overlay == 1,
+        onProgress: _wrapChunkProgress(chunk),
       );
       stopwatch.stop();
       Log.i(
         "本地同步标签完成：${result.logSummary} bytes=${body.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
       );
 
-      SmartDialog.showToast('已同步标签列表（${result.imported} 条）');
-      EventBus.instance.emit(Constant.kUpdateFollow, 0);
+      if (chunk.isLastChunk) {
+        SmartDialog.showToast(
+          '已同步标签列表（${chunk.itemTotal > 0 ? chunk.itemTotal : result.imported} 条）',
+        );
+        EventBus.instance.emit(Constant.kUpdateFollow, 0);
+        SyncProgressDialog.dismiss();
+      }
       return toJsonResponse({
         'status': true,
         'message': 'success',
       });
     } catch (e) {
+      SyncProgressDialog.dismiss();
       return toJsonResponse({
         'status': false,
         'message': e.toString(),
@@ -321,7 +341,9 @@ class SyncService extends GetxService {
     try {
       var overlay =
           int.parse(request.requestedUri.queryParameters['overlay'] ?? '0');
+      final chunk = _readSyncChunk(request);
       var body = await request.readAsString();
+      SyncProgressDialog.show(_stageProgress("接收历史", chunk));
       final stopwatch = Stopwatch()..start();
       var jsonBody = json.decode(body);
       if (jsonBody is! List) {
@@ -330,19 +352,26 @@ class SyncService extends GetxService {
       final result = await BulkDataImportService.importHistories(
         jsonBody,
         overwrite: overlay == 1,
+        onProgress: _wrapChunkProgress(chunk),
       );
       stopwatch.stop();
       Log.i(
         "本地同步历史完成：${result.logSummary} bytes=${body.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
       );
 
-      SmartDialog.showToast('已同步观看记录（${result.imported} 条）');
-      EventBus.instance.emit(Constant.kUpdateHistory, 0);
+      if (chunk.isLastChunk) {
+        SmartDialog.showToast(
+          '已同步观看记录（${chunk.itemTotal > 0 ? chunk.itemTotal : result.imported} 条）',
+        );
+        EventBus.instance.emit(Constant.kUpdateHistory, 0);
+        SyncProgressDialog.dismiss();
+      }
       return toJsonResponse({
         'status': true,
         'message': 'success',
       });
     } catch (e) {
+      SyncProgressDialog.dismiss();
       return toJsonResponse({
         'status': false,
         'message': e.toString(),
@@ -355,7 +384,9 @@ class SyncService extends GetxService {
     try {
       var overlay =
           int.parse(request.requestedUri.queryParameters['overlay'] ?? '0');
+      final chunk = _readSyncChunk(request);
       var body = await request.readAsString();
+      SyncProgressDialog.show(_stageProgress("接收屏蔽词", chunk));
       final stopwatch = Stopwatch()..start();
       var jsonBody = json.decode(body);
       if (jsonBody is! List) {
@@ -364,17 +395,24 @@ class SyncService extends GetxService {
       final result = await BulkDataImportService.importShieldValues(
         jsonBody,
         overwrite: overlay == 1,
+        onProgress: _wrapChunkProgress(chunk),
       );
       stopwatch.stop();
       Log.i(
         "本地同步屏蔽词完成：${result.logSummary} bytes=${body.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
       );
-      SmartDialog.showToast('已同步弹幕屏蔽词（${result.imported} 条）');
+      if (chunk.isLastChunk) {
+        SmartDialog.showToast(
+          '已同步弹幕屏蔽词（${chunk.itemTotal > 0 ? chunk.itemTotal : result.imported} 条）',
+        );
+        SyncProgressDialog.dismiss();
+      }
       return toJsonResponse({
         'status': true,
         'message': 'success',
       });
     } catch (e) {
+      SyncProgressDialog.dismiss();
       return toJsonResponse({
         'status': false,
         'message': e.toString(),
@@ -387,21 +425,67 @@ class SyncService extends GetxService {
       final overlay =
           int.parse(request.requestedUri.queryParameters['overlay'] ?? '0');
       final body = await request.readAsString();
+      SyncProgressDialog.show(const SyncProgress(stage: "接收配置包"));
       final summary = await ProfileBackupService.instance.importProfileJson(
         body,
         overwrite: overlay == 1,
+        onProgress: SyncProgressDialog.update,
       );
       SmartDialog.showToast('已同步配置包');
+      SyncProgressDialog.dismiss();
       return toJsonResponse({
         'status': true,
         'message': summary.message,
       });
     } catch (e) {
+      SyncProgressDialog.dismiss();
       return toJsonResponse({
         'status': false,
         'message': e.toString(),
       });
     }
+  }
+
+  _SyncChunk _readSyncChunk(shelf.Request request) {
+    final params = request.requestedUri.queryParameters;
+    return _SyncChunk(
+      chunkIndex: int.tryParse(params["chunkIndex"] ?? "") ?? 1,
+      chunkTotal: int.tryParse(params["chunkTotal"] ?? "") ?? 1,
+      itemStart: int.tryParse(params["itemStart"] ?? "") ?? 0,
+      itemEnd: int.tryParse(params["itemEnd"] ?? "") ?? 0,
+      itemTotal: int.tryParse(params["itemTotal"] ?? "") ?? 0,
+    );
+  }
+
+  SyncProgress _stageProgress(String stage, _SyncChunk chunk) {
+    final total = chunk.itemTotal > 0 ? chunk.itemTotal : chunk.chunkTotal;
+    final current = chunk.itemTotal > 0 ? chunk.itemEnd : chunk.chunkIndex;
+    return SyncProgress(
+      stage: stage,
+      current: current,
+      total: total,
+      message: chunk.chunkTotal > 1
+          ? "接收第 ${chunk.chunkIndex}/${chunk.chunkTotal} 段"
+          : stage,
+    );
+  }
+
+  SyncProgressCallback _wrapChunkProgress(_SyncChunk chunk) {
+    return (progress) {
+      if (chunk.itemTotal <= 0) {
+        SyncProgressDialog.update(progress);
+        return;
+      }
+      final current = (chunk.itemStart + progress.current)
+          .clamp(0, chunk.itemTotal)
+          .toInt();
+      SyncProgressDialog.update(SyncProgress(
+        stage: progress.stage,
+        current: current,
+        total: chunk.itemTotal,
+        message: "${progress.stage} $current/${chunk.itemTotal}",
+      ));
+    };
   }
 
   /// 同步哔哩哔哩账号
@@ -477,6 +561,24 @@ class SyncService extends GetxService {
     server?.close(force: true);
     super.onClose();
   }
+}
+
+class _SyncChunk {
+  final int chunkIndex;
+  final int chunkTotal;
+  final int itemStart;
+  final int itemEnd;
+  final int itemTotal;
+
+  const _SyncChunk({
+    required this.chunkIndex,
+    required this.chunkTotal,
+    required this.itemStart,
+    required this.itemEnd,
+    required this.itemTotal,
+  });
+
+  bool get isLastChunk => chunkIndex >= chunkTotal;
 }
 
 class SyncClinet {
