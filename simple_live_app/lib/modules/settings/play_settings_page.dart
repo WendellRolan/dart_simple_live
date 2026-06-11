@@ -320,6 +320,28 @@ class PlaySettingsPage extends GetView<AppSettingsController> {
                 ),
                 AppStyle.divider,
                 Obx(
+                  () => SettingsSwitch(
+                    title: "关播后自动换下一个直播间",
+                    subtitle: "当前房间确认已下播后，自动切到关注列表里下一个正在直播的房间",
+                    value: controller.autoSwitchNextOnLiveEnd.value,
+                    onChanged: (e) {
+                      controller.setAutoSwitchNextOnLiveEnd(e);
+                    },
+                  ),
+                ),
+                AppStyle.divider,
+                Obx(
+                  () => SettingsSwitch(
+                    title: "播放失败后自动换下一个直播间",
+                    subtitle: "当前房间重试和线路切换都失败后，自动切到下一个正在直播的房间",
+                    value: controller.autoSwitchNextOnPlaybackFailure.value,
+                    onChanged: (e) {
+                      controller.setAutoSwitchNextOnPlaybackFailure(e);
+                    },
+                  ),
+                ),
+                AppStyle.divider,
+                Obx(
                   () => Visibility(
                     visible: Platform.isAndroid,
                     child: SettingsSwitch(

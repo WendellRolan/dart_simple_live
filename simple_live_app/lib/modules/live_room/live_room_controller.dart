@@ -25,6 +25,7 @@ import 'package:simple_live_app/modules/live_room/widgets/live_contribution_rank
 import 'package:simple_live_app/modules/settings/danmu_settings_page.dart';
 import 'package:simple_live_app/routes/app_navigation.dart';
 import 'package:simple_live_app/routes/route_path.dart';
+import 'package:simple_live_app/services/current_room_service.dart';
 import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/follow_service.dart';
 import 'package:simple_live_app/services/live_subtitle_service.dart';
@@ -75,6 +76,7 @@ class LiveRoomController extends PlayerController
       RxList<LiveContributionRankItem>();
   RxList<LiveRepeatedDanmuSummary> liveEventFlows =
       RxList<LiveRepeatedDanmuSummary>();
+  bool _autoSwitchingRoom = false;
   var contributionRankLoading = false.obs;
   var contributionRankFetched = false.obs;
   Rx<String?> contributionRankError = Rx<String?>(null);
@@ -173,6 +175,7 @@ class LiveRoomController extends PlayerController
 
   @override
   void onInit() {
+    CurrentRoomService.instance.setRoom(site, roomId);
     WidgetsBinding.instance.addObserver(this);
     if (Platform.isWindows) {
       windowManager.addListener(this);
@@ -1547,6 +1550,7 @@ class LiveRoomController extends PlayerController
         return;
       }
       liveStatus.value = false;
+      await _tryAutoSwitchToNextLiveRoom(reason: "live_end");
     } else {
       await changePlayLine(currentLineIndex + 1);
 
@@ -1578,10 +1582,57 @@ class LiveRoomController extends PlayerController
       }
       errorMsg.value = "播放失败";
       SmartDialog.showToast("播放失败: $error");
+      await _tryAutoSwitchToNextLiveRoom(reason: "playback_failure");
     } else {
       //currentLineIndex += 1;
       //setPlayer();
       await changePlayLine(currentLineIndex + 1);
+    }
+  }
+
+  Future<void> _tryAutoSwitchToNextLiveRoom({required String reason}) async {
+    final settings = AppSettingsController.instance;
+    final enabled = reason == "live_end"
+        ? settings.autoSwitchNextOnLiveEnd.value
+        : settings.autoSwitchNextOnPlaybackFailure.value;
+    if (!enabled || _autoSwitchingRoom) {
+      return;
+    }
+
+    final liveChannels = FollowService.instance.sortFollowUsers(
+      FollowService.instance.liveList,
+    );
+    if (liveChannels.isEmpty) {
+      return;
+    }
+
+    final currentId = "${site.id}_$roomId";
+    final currentIndex =
+        liveChannels.indexWhere((item) => item.id == currentId);
+    final candidates =
+        liveChannels.where((item) => item.id != currentId).toList();
+    if (candidates.isEmpty) {
+      return;
+    }
+
+    FollowUser target;
+    if (currentIndex < 0 || currentIndex >= liveChannels.length - 1) {
+      target = candidates.first;
+    } else {
+      target = liveChannels[currentIndex + 1];
+      if (target.id == currentId) {
+        target = candidates.first;
+      }
+    }
+
+    _autoSwitchingRoom = true;
+    try {
+      SmartDialog.showToast(
+        reason == "live_end" ? "当前直播已结束，已切换到下一个直播间" : "当前直播播放失败，已切换到下一个直播间",
+      );
+      resetRoom(Sites.allSites[target.siteId]!, target.roomId);
+    } finally {
+      _autoSwitchingRoom = false;
     }
   }
 
@@ -2614,6 +2665,7 @@ class LiveRoomController extends PlayerController
 
     rxSite.value = site;
     rxRoomId.value = roomId;
+    CurrentRoomService.instance.setRoom(site, roomId);
     _roomDisposed = false;
     _loadGeneration += 1;
     tempMutedUsers.clear();

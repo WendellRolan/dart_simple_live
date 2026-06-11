@@ -7,6 +7,7 @@ import 'package:simple_live_core/simple_live_core.dart';
 import 'package:simple_live_tv_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_tv_app/app/log.dart';
 import 'package:simple_live_tv_app/modules/multi_room/multi_room_models.dart';
+import 'package:simple_live_tv_app/services/mpv_options_service.dart';
 
 class MultiRoomPlayerController extends GetxController {
   final MultiRoomItem item;
@@ -21,16 +22,7 @@ class MultiRoomPlayerController extends GetxController {
   );
   late final VideoController videoController = VideoController(
     player,
-    configuration: AppSettingsController.instance.playerCompatMode.value
-        ? const VideoControllerConfiguration(
-            vo: 'mediacodec_embed',
-            hwdec: 'mediacodec',
-          )
-        : VideoControllerConfiguration(
-            enableHardwareAcceleration:
-                AppSettingsController.instance.hardwareDecode.value,
-            androidAttachSurfaceAfterVideoParameters: false,
-          ),
+    configuration: MpvOptionsService.videoControllerConfiguration(),
   );
 
   final detail = Rx<LiveRoomDetail?>(null);
@@ -64,6 +56,7 @@ class MultiRoomPlayerController extends GetxController {
   void onInit() {
     super.onInit();
     _initPlayerStreams();
+    unawaited(MpvOptionsService.applyToPlayer(player));
     unawaited(load());
   }
 

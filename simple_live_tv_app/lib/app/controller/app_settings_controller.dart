@@ -41,6 +41,8 @@ class AppSettingsController extends GetxController {
     24,
     32,
   ];
+  static const int kFollowPageSizeDefault = 200;
+  static const int kFollowPageSizeMin = 2;
 
   /// 缩放模式
   var scaleMode = 0.obs;
@@ -151,12 +153,23 @@ class AppSettingsController extends GetxController {
 
     playerCompatMode.value = LocalStorageService.instance
         .getValue(LocalStorageService.kPlayerCompatMode, false);
+    mpvProfile.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kMpvProfile, "balanced");
 
     playerAutoPause.value = LocalStorageService.instance
         .getValue(LocalStorageService.kPlayerAutoPause, false);
 
     autoFullScreen.value = LocalStorageService.instance
         .getValue(LocalStorageService.kAutoFullScreen, false);
+    autoSwitchNextOnLiveEnd.value = LocalStorageService.instance.getValue(
+      LocalStorageService.kAutoSwitchNextOnLiveEnd,
+      false,
+    );
+    autoSwitchNextOnPlaybackFailure.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kAutoSwitchNextOnPlaybackFailure,
+      false,
+    );
 
     shieldList
       ..clear()
@@ -202,6 +215,12 @@ class AppSettingsController extends GetxController {
       LocalStorageService.instance.getValue(
         LocalStorageService.kUpdateFollowThreadCount,
         0,
+      ),
+    );
+    followPageSize.value = _normalizeFollowPageSize(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kFollowPageSize,
+        kFollowPageSizeDefault,
       ),
     );
     multiRoomGap.value = _normalizeMultiRoomGap(
@@ -454,6 +473,12 @@ class AppSettingsController extends GetxController {
         .setValue(LocalStorageService.kPlayerCompatMode, e);
   }
 
+  var mpvProfile = "balanced".obs;
+  void setMpvProfile(String e) {
+    mpvProfile.value = e;
+    LocalStorageService.instance.setValue(LocalStorageService.kMpvProfile, e);
+  }
+
   var playerBufferSize = 32.obs;
   void setPlayerBufferSize(int e) {
     playerBufferSize.value = e;
@@ -473,6 +498,24 @@ class AppSettingsController extends GetxController {
     autoFullScreen.value = e;
     LocalStorageService.instance
         .setValue(LocalStorageService.kAutoFullScreen, e);
+  }
+
+  var autoSwitchNextOnLiveEnd = false.obs;
+  void setAutoSwitchNextOnLiveEnd(bool e) {
+    autoSwitchNextOnLiveEnd.value = e;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kAutoSwitchNextOnLiveEnd,
+      e,
+    );
+  }
+
+  var autoSwitchNextOnPlaybackFailure = false.obs;
+  void setAutoSwitchNextOnPlaybackFailure(bool e) {
+    autoSwitchNextOnPlaybackFailure.value = e;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kAutoSwitchNextOnPlaybackFailure,
+      e,
+    );
   }
 
   RxSet<String> shieldList = <String>{}.obs;
@@ -603,6 +646,20 @@ class AppSettingsController extends GetxController {
       return value;
     }
     return 0;
+  }
+
+  var followPageSize = kFollowPageSizeDefault.obs;
+  int _normalizeFollowPageSize(int value) {
+    return value.clamp(kFollowPageSizeMin, 400).toInt();
+  }
+
+  void setFollowPageSize(int value) {
+    final normalized = _normalizeFollowPageSize(value);
+    followPageSize.value = normalized;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kFollowPageSize,
+      normalized,
+    );
   }
 
   var multiRoomGap = kMultiRoomDefaultGap.obs;

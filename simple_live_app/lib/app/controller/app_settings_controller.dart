@@ -143,6 +143,15 @@ class AppSettingsController extends GetxController {
 
     playerForceHttps.value = LocalStorageService.instance
         .getValue(LocalStorageService.kPlayerForceHttps, false);
+    autoSwitchNextOnLiveEnd.value = LocalStorageService.instance.getValue(
+      LocalStorageService.kAutoSwitchNextOnLiveEnd,
+      false,
+    );
+    autoSwitchNextOnPlaybackFailure.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kAutoSwitchNextOnPlaybackFailure,
+      false,
+    );
 
     autoFullScreen.value = LocalStorageService.instance
         .getValue(LocalStorageService.kAutoFullScreen, false);
@@ -241,6 +250,12 @@ class AppSettingsController extends GetxController {
 
     customPlayerOutput.value = LocalStorageService.instance
         .getValue(LocalStorageService.kCustomPlayerOutput, false);
+    mpvProfile.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kMpvProfile, "balanced");
+    mpvAdvancedOptions.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kMpvAdvancedOptions, "");
+    importedMpvConfPath.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kImportedMpvConfPath, "");
 
     LocalStorageService.instance
         .setValue(LocalStorageService.kLiveSubtitleEnable, false);
@@ -305,6 +320,12 @@ class AppSettingsController extends GetxController {
 
     updateFollowThreadCount.value = LocalStorageService.instance.getValue(
         LocalStorageService.kUpdateFollowThreadCount, 8); // 默认 8，0 = 自动
+    followPageSize.value = _normalizeFollowPageSize(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kFollowPageSize,
+        kFollowPageSizeDefault,
+      ),
+    );
 
     lastSearchSiteId.value = LocalStorageService.instance.getValue(
       LocalStorageService.kLastSearchSiteId,
@@ -908,6 +929,24 @@ class AppSettingsController extends GetxController {
     autoFullScreen.value = e;
     LocalStorageService.instance
         .setValue(LocalStorageService.kAutoFullScreen, e);
+  }
+
+  var autoSwitchNextOnLiveEnd = false.obs;
+  void setAutoSwitchNextOnLiveEnd(bool e) {
+    autoSwitchNextOnLiveEnd.value = e;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kAutoSwitchNextOnLiveEnd,
+      e,
+    );
+  }
+
+  var autoSwitchNextOnPlaybackFailure = false.obs;
+  void setAutoSwitchNextOnPlaybackFailure(bool e) {
+    autoSwitchNextOnPlaybackFailure.value = e;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kAutoSwitchNextOnPlaybackFailure,
+      e,
+    );
   }
 
   var autoPipOnExit = false.obs;
@@ -2292,6 +2331,26 @@ class AppSettingsController extends GetxController {
         .setValue(LocalStorageService.kVideoHardwareDecoder, e);
   }
 
+  var mpvProfile = "balanced".obs;
+  void setMpvProfile(String e) {
+    mpvProfile.value = e;
+    LocalStorageService.instance.setValue(LocalStorageService.kMpvProfile, e);
+  }
+
+  var mpvAdvancedOptions = "".obs;
+  void setMpvAdvancedOptions(String e) {
+    mpvAdvancedOptions.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kMpvAdvancedOptions, e);
+  }
+
+  var importedMpvConfPath = "".obs;
+  void setImportedMpvConfPath(String e) {
+    importedMpvConfPath.value = e;
+    LocalStorageService.instance
+        .setValue(LocalStorageService.kImportedMpvConfPath, e);
+  }
+
   var autoUpdateFollowEnable = false.obs;
   void setAutoUpdateFollowEnable(bool e) {
     autoUpdateFollowEnable.value = e;
@@ -2311,6 +2370,22 @@ class AppSettingsController extends GetxController {
     updateFollowThreadCount.value = e;
     LocalStorageService.instance
         .setValue(LocalStorageService.kUpdateFollowThreadCount, e);
+  }
+
+  static const int kFollowPageSizeDefault = 200;
+  static const int kFollowPageSizeMin = 2;
+  var followPageSize = kFollowPageSizeDefault.obs;
+  int _normalizeFollowPageSize(int value) {
+    return value.clamp(kFollowPageSizeMin, 400).toInt();
+  }
+
+  void setFollowPageSize(int value) {
+    final normalized = _normalizeFollowPageSize(value);
+    followPageSize.value = normalized;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kFollowPageSize,
+      normalized,
+    );
   }
 
   var playerForceHttps = false.obs;

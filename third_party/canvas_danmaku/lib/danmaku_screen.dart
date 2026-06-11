@@ -218,6 +218,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
         content,
         _option.fontSize,
         _option.fontWeight,
+        _option.emojiScale,
       );
       final danmakuWidth = contentSize.width;
       final danmakuHeight = contentSize.height;
@@ -227,6 +228,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
         danmakuWidth,
         _option.fontSize,
         _option.fontWeight,
+        _option.emojiScale,
       );
 
       ui.Paragraph? strokeParagraph;
@@ -236,6 +238,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
           danmakuWidth,
           _option.fontSize,
           _option.fontWeight,
+          _option.emojiScale,
         );
       }
 
@@ -407,6 +410,9 @@ class _DanmakuScreenState extends State<DanmakuScreen>
     if (option.fontSize != _option.fontSize) {
       needClearParagraph = true;
     }
+    if (option.emojiScale != _option.emojiScale) {
+      needClearParagraph = true;
+    }
     if (option.duration != _option.duration) {
       _animationController.duration = Duration(seconds: option.duration);
       _staticAnimationController.duration = Duration(seconds: option.duration);
@@ -466,6 +472,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
         a.fontWeight == b.fontWeight &&
         a.area == b.area &&
         a.lineHeight == b.lineHeight &&
+        a.emojiScale == b.emojiScale &&
         a.duration == b.duration &&
         a.opacity == b.opacity &&
         a.hideTop == b.hideTop &&

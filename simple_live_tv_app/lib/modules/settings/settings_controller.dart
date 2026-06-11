@@ -41,6 +41,7 @@ class SettingsController extends BaseController
   }
   var hardwareDecodeFocusNode = AppFocusNode()..isFoucsed.value = true;
   var compatibleModeFocusNode = AppFocusNode();
+  var mpvProfileFocusNode = AppFocusNode();
   var scaleFoucsNode = AppFocusNode();
   var defaultQualityFocusNode = AppFocusNode();
   var danmakuFoucsNode = AppFocusNode();
@@ -63,6 +64,7 @@ class SettingsController extends BaseController
   var autoUpdateFollowEnableFocusNode = AppFocusNode();
   var autoUpdateFollowDurationFocusNode = AppFocusNode();
   var updateFollowThreadFocusNode = AppFocusNode();
+  var followPageSizeFocusNode = AppFocusNode();
   var multiRoomGapFocusNode = AppFocusNode();
 
   var bilibiliFoucsNode = AppFocusNode();

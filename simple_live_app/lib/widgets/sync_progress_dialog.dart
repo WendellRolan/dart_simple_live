@@ -41,6 +41,9 @@ class _SyncProgressDialogBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final progressText = progress.total > 0
+        ? "${progress.current}/${progress.total}"
+        : "--/--";
     return Container(
       width: 320,
       padding: AppStyle.edgeInsetsA24,
@@ -52,9 +55,19 @@ class _SyncProgressDialogBody extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            progress.stage,
-            style: theme.textTheme.titleMedium,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  progress.stage,
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+              Text(
+                progressText,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
           ),
           AppStyle.vGap12,
           LinearProgressIndicator(

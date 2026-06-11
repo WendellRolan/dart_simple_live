@@ -63,6 +63,9 @@ class LocalStorageService extends GetxService {
   static const String kAllowBackgroundPlayback = "AllowBackgroundPlayback";
   static const String kPlayerBufferSize = "PlayerBufferSize";
   static const String kPlayerForceHttps = "PlayerForceHttps";
+  static const String kAutoSwitchNextOnLiveEnd = "AutoSwitchNextOnLiveEnd";
+  static const String kAutoSwitchNextOnPlaybackFailure =
+      "AutoSwitchNextOnPlaybackFailure";
   static const String kAutoFullScreen = "AutoFullScreen";
   static const String kAutoPipOnExit = "AutoPipOnExit";
   static const String kPlayerShowSuperChat = "PlayerShowSuperChat";
@@ -94,9 +97,13 @@ class LocalStorageService extends GetxService {
   static const String kVideoOutputDriver = "VideoOutputDriver";
   static const String kVideoHardwareDecoder = "VideoHardwareDecoder";
   static const String kAudioOutputDriver = "AudioOutputDriver";
+  static const String kMpvProfile = "MpvProfile";
+  static const String kMpvAdvancedOptions = "MpvAdvancedOptions";
+  static const String kImportedMpvConfPath = "ImportedMpvConfPath";
   static const String kAutoUpdateFollowEnable = "AutoUpdateFollowEnable";
   static const String kUpdateFollowDuration = "AutoUpdateFollowDuration";
   static const String kUpdateFollowThreadCount = "UpdateFollowThreadCount";
+  static const String kFollowPageSize = "FollowPageSize";
   static const String kUserRemarks = "UserRemarks";
   static const String kLastLiveRoom = "LastLiveRoom";
   static const String kLastLiveRoomResumePending = "LastLiveRoomResumePending";

@@ -278,6 +278,8 @@ Widget buildDanmuView(VideoState videoState, LiveRoomController controller) {
     option: DanmakuOption(
       fontSize: AppSettingsController.instance.danmuSize.value.w,
       area: AppSettingsController.instance.danmuArea.value,
+      lineHeight: 1.25,
+      emojiScale: 1.4,
       duration: AppSettingsController.instance.danmuSpeed.value.toInt(),
       opacity: AppSettingsController.instance.danmuOpacity.value,
     ),
@@ -383,6 +385,7 @@ void showPlayerSettings(LiveRoomController controller) {
   controller.focusNode.unfocus();
 
   var followFocusNode = AppFocusNode()..isFoucsed.value = true;
+  var specialFollowFocusNode = AppFocusNode();
   var qualityFoucsNode = AppFocusNode();
   var lineFoucsNode = AppFocusNode();
   var scaleFoucsNode = AppFocusNode();
@@ -438,6 +441,19 @@ void showPlayerSettings(LiveRoomController controller) {
                     } else {
                       controller.removeFollowUser();
                     }
+                  },
+                ),
+              ),
+              AppStyle.vGap24,
+              Obx(
+                () => SettingsItemWidget(
+                  foucsNode: specialFollowFocusNode,
+                  autofocus: specialFollowFocusNode.isFoucsed.value,
+                  title: "特别关注",
+                  items: const {false: "否", true: "是"},
+                  value: controller.specialFollowed.value,
+                  onChanged: (e) {
+                    controller.toggleSpecialFollow(e);
                   },
                 ),
               ),
@@ -561,6 +577,8 @@ void showPlayerSettings(LiveRoomController controller) {
                     controller.updateDanmuOption(
                       controller.danmakuController?.option.copyWith(
                         fontSize: (e as double).w,
+                        lineHeight: 1.25,
+                        emojiScale: 1.4,
                       ),
                     );
                   },
@@ -666,6 +684,16 @@ void showFollowUser(LiveRoomController controller) {
   final followScrollController = ScrollController(
     initialScrollOffset: currentIndex * 172.w,
   );
+  final currentFocusNode = AppFocusNode();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (currentIndex > 0 && followScrollController.hasClients) {
+      followScrollController.jumpTo(
+        (currentIndex * 172.w)
+            .clamp(0.0, followScrollController.position.maxScrollExtent),
+      );
+    }
+    currentFocusNode.requestFocus();
+  });
 
   Utils.showSystemRightDialog(
     width: 800.w,
@@ -721,6 +749,7 @@ void showFollowUser(LiveRoomController controller) {
                       liveStatus: item.liveStatus.value,
                       roomId: item.roomId,
                       autofocus: i == currentIndex,
+                      focusNode: i == currentIndex ? currentFocusNode : null,
                       onTap: () {
                         controller.resetRoom(site, item.roomId);
                         Get.back();
@@ -742,6 +771,7 @@ void showFollowUser(LiveRoomController controller) {
     ),
   ).then((value) {
     followScrollController.dispose();
+    currentFocusNode.dispose();
     // 还原焦点
     controller.focusNode.requestFocus();
   });

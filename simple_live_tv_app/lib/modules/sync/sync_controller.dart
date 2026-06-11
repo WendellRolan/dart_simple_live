@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
 import 'package:simple_live_tv_app/app/event_bus.dart';
@@ -11,7 +12,6 @@ import 'package:simple_live_tv_app/services/bilibili_account_service.dart';
 import 'package:simple_live_tv_app/services/bulk_data_import_service.dart';
 import 'package:simple_live_tv_app/services/signalr_service.dart';
 import 'package:simple_live_tv_app/widgets/sync_progress_dialog.dart';
-import 'package:simple_live_core/simple_live_core.dart';
 
 class SyncController extends BaseController {
   final SignalRService signalR = SignalRService();
@@ -22,18 +22,29 @@ class SyncController extends BaseController {
   StreamSubscription? _onHistorySubscription;
   StreamSubscription? _onShieldWordSubscription;
   StreamSubscription? _onBiliAccountSubscription;
-  var currentRoomId = "--".obs;
-  RxList<RoomUser> roomUsers = <RoomUser>[].obs;
+  final currentRoomId = "--".obs;
+  final RxList<RoomUser> roomUsers = <RoomUser>[].obs;
   Timer? _timer;
-  var countDown = 600.obs;
+  final countDown = 600.obs;
 
-  Rx<SignalRConnectionState> state =
+  final Rx<SignalRConnectionState> state =
       Rx<SignalRConnectionState>(SignalRConnectionState.connecting);
 
   @override
   void onInit() {
     connect();
     super.onInit();
+  }
+
+  void _finishSyncImport({
+    required String successMessage,
+    String? eventName,
+  }) {
+    if (eventName != null) {
+      EventBus.instance.emit(eventName, 0);
+    }
+    SyncProgressDialog.dismiss();
+    SmartDialog.showToast(successMessage);
   }
 
   void connect() async {
@@ -52,7 +63,7 @@ class SyncController extends BaseController {
 
   void createRoom() async {
     try {
-      var resp = await signalR.createRoom();
+      final resp = await signalR.createRoom();
       if (resp.isSuccess && (resp.data?.trim().isNotEmpty ?? false)) {
         currentRoomId.value = resp.data!.trim();
         _startTimer();
@@ -81,10 +92,9 @@ class SyncController extends BaseController {
   }
 
   void _startTimer() {
-    // 倒计时5分钟，自动关闭页面
     countDown.value = 600;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      countDown--;
+      countDown.value--;
       if (countDown <= 0) {
         timer.cancel();
         Get.back();
@@ -105,18 +115,12 @@ class SyncController extends BaseController {
         this.roomUsers.assignAll(roomUsers);
       },
     );
-    _onFavoriteSubscription = signalR.onFavoriteStream.listen((data) {
-      onReceiveFavorite(data);
-    });
-    _onHistorySubscription = signalR.onHistoryStream.listen((data) {
-      onReceiveHistory(data);
-    });
-    _onShieldWordSubscription = signalR.onShieldWordStream.listen((data) {
-      onReceiveShieldWord(data);
-    });
-    _onBiliAccountSubscription = signalR.onBiliAccountStream.listen((data) {
-      onReceiveBiliAccount(data);
-    });
+    _onFavoriteSubscription = signalR.onFavoriteStream.listen(onReceiveFavorite);
+    _onHistorySubscription = signalR.onHistoryStream.listen(onReceiveHistory);
+    _onShieldWordSubscription =
+        signalR.onShieldWordStream.listen(onReceiveShieldWord);
+    _onBiliAccountSubscription =
+        signalR.onBiliAccountStream.listen(onReceiveBiliAccount);
   }
 
   SyncProgress _stageProgress(String stage, RoomSyncPayload payload) {
@@ -143,12 +147,14 @@ class SyncController extends BaseController {
       final current = (payload.itemStart + progress.current)
           .clamp(0, payload.itemTotal)
           .toInt();
-      SyncProgressDialog.update(SyncProgress(
-        stage: progress.stage,
-        current: current,
-        total: payload.itemTotal,
-        message: "${progress.stage} $current/${payload.itemTotal}",
-      ));
+      SyncProgressDialog.update(
+        SyncProgress(
+          stage: progress.stage,
+          current: current,
+          total: payload.itemTotal,
+          message: "${progress.stage} $current/${payload.itemTotal}",
+        ),
+      );
     };
   }
 
@@ -156,24 +162,28 @@ class SyncController extends BaseController {
     try {
       SyncProgressDialog.show(_stageProgress("接收关注", payload));
       final stopwatch = Stopwatch()..start();
-      var jsonBody = json.decode(payload.content);
+      final jsonBody = json.decode(payload.content);
       if (jsonBody is! List) {
         throw const FormatException("关注列表格式不是数组");
       }
+
       final result = await BulkDataImportService.importFollowUsers(
         jsonBody,
         overwrite: payload.overlay,
         onProgress: _wrapPayloadProgress(payload),
       );
+
       stopwatch.stop();
       Log.i(
         "房间同步关注完成：${result.logSummary} bytes=${payload.content.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
       );
+
       if (payload.isLastChunk) {
-        EventBus.instance.emit(Constant.kUpdateFollow, 0);
-        SmartDialog.showToast(
-            "已同步关注列表（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）");
-        SyncProgressDialog.dismiss();
+        _finishSyncImport(
+          successMessage:
+              "已同步关注列表（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）",
+          eventName: Constant.kUpdateFollow,
+        );
       }
     } catch (e) {
       SyncProgressDialog.dismiss();
@@ -186,24 +196,28 @@ class SyncController extends BaseController {
     try {
       SyncProgressDialog.show(_stageProgress("接收历史", payload));
       final stopwatch = Stopwatch()..start();
-      var jsonBody = json.decode(payload.content);
+      final jsonBody = json.decode(payload.content);
       if (jsonBody is! List) {
         throw const FormatException("历史记录格式不是数组");
       }
+
       final result = await BulkDataImportService.importHistories(
         jsonBody,
         overwrite: payload.overlay,
         onProgress: _wrapPayloadProgress(payload),
       );
+
       stopwatch.stop();
       Log.i(
         "房间同步历史完成：${result.logSummary} bytes=${payload.content.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
       );
+
       if (payload.isLastChunk) {
-        SmartDialog.showToast(
-            "已同步历史记录（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）");
-        EventBus.instance.emit(Constant.kUpdateHistory, 0);
-        SyncProgressDialog.dismiss();
+        _finishSyncImport(
+          successMessage:
+              "已同步观看记录（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）",
+          eventName: Constant.kUpdateHistory,
+        );
       }
     } catch (e) {
       SyncProgressDialog.dismiss();
@@ -216,23 +230,27 @@ class SyncController extends BaseController {
     try {
       SyncProgressDialog.show(_stageProgress("接收屏蔽词", payload));
       final stopwatch = Stopwatch()..start();
-      var jsonBody = json.decode(payload.content);
+      final jsonBody = json.decode(payload.content);
       if (jsonBody is! List) {
         throw const FormatException("屏蔽词格式不是数组");
       }
+
       final result = await BulkDataImportService.importShieldValues(
         jsonBody,
         overwrite: payload.overlay,
         onProgress: _wrapPayloadProgress(payload),
       );
+
       stopwatch.stop();
       Log.i(
         "房间同步屏蔽词完成：${result.logSummary} bytes=${payload.content.length} elapsed=${stopwatch.elapsedMilliseconds}ms",
       );
+
       if (payload.isLastChunk) {
-        SmartDialog.showToast(
-            "已同步屏蔽词（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）");
-        SyncProgressDialog.dismiss();
+        _finishSyncImport(
+          successMessage:
+              "已同步屏蔽词（${payload.itemTotal > 0 ? payload.itemTotal : result.imported} 条）",
+        );
       }
     } catch (e) {
       SyncProgressDialog.dismiss();
@@ -243,11 +261,11 @@ class SyncController extends BaseController {
 
   void onReceiveBiliAccount(RoomSyncPayload payload) async {
     try {
-      var jsonBody = json.decode(payload.content);
+      final jsonBody = json.decode(payload.content);
       if (jsonBody is! Map) {
         throw const FormatException("账号数据格式不是对象");
       }
-      var cookie = jsonBody['cookie']?.toString() ?? "";
+      final cookie = jsonBody['cookie']?.toString() ?? "";
       if (cookie.isEmpty) {
         throw const FormatException("账号 Cookie 为空");
       }

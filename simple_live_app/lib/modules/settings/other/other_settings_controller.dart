@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -14,6 +15,7 @@ import 'package:path/path.dart' as p;
 import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/services/live_subtitle_service.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
+import 'package:simple_live_app/services/mpv_options_service.dart';
 import 'package:simple_live_app/services/profile_backup_service.dart';
 import 'package:simple_live_app/services/signalr_service.dart';
 import 'package:simple_live_app/widgets/sync_progress_dialog.dart';
@@ -314,6 +316,63 @@ class OtherSettingsController extends BaseController {
     }
     await SignalRService.setConfiguredProxyUrl(value);
     SmartDialog.showToast(value.trim().isEmpty ? "已恢复自动检测代理" : "已保存");
+    update();
+  }
+
+  Future<void> editMpvAdvancedOptions() async {
+    final textController = TextEditingController(
+      text: AppSettingsController.instance.mpvAdvancedOptions.value,
+    );
+    final value = await Get.dialog<String>(
+      AlertDialog(
+        title: const Text("高级 mpv options"),
+        content: SizedBox(
+          width: 520,
+          child: TextField(
+            controller: textController,
+            minLines: 8,
+            maxLines: 14,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: "每行一个，例如 scale=spline36",
+            ),
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: Get.back,
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: textController.text),
+            child: const Text("确定"),
+          ),
+        ],
+      ),
+    );
+    textController.dispose();
+    if (value == null) {
+      return;
+    }
+    AppSettingsController.instance.setMpvAdvancedOptions(value);
+    SmartDialog.showToast("已保存，重开直播间后生效");
+    update();
+  }
+
+  Future<void> importMpvConf() async {
+    final path = await MpvOptionsService.importMpvConf();
+    if (path == null) {
+      return;
+    }
+    AppSettingsController.instance.setImportedMpvConfPath(path);
+    SmartDialog.showToast("已导入 mpv.conf，重开直播间后生效");
+    update();
+  }
+
+  void clearImportedMpvConf() {
+    AppSettingsController.instance.setImportedMpvConfPath("");
+    SmartDialog.showToast("已清除导入配置");
     update();
   }
 }

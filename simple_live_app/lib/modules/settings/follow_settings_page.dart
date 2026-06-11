@@ -6,6 +6,7 @@ import 'package:simple_live_app/services/follow_service.dart';
 import 'package:simple_live_app/widgets/settings/settings_action.dart';
 import 'package:simple_live_app/widgets/settings/settings_card.dart';
 import 'package:simple_live_app/widgets/settings/settings_switch.dart';
+import 'package:simple_live_app/widgets/settings/settings_menu.dart';
 
 class FollowSettingsPage extends GetView<AppSettingsController> {
   const FollowSettingsPage({super.key});
@@ -49,6 +50,24 @@ class FollowSettingsPage extends GetView<AppSettingsController> {
                         setTimer(context);
                       },
                     ),
+                  ),
+                ),
+                AppStyle.divider,
+                Obx(
+                  () => SettingsMenu<int>(
+                    title: "鍏虫敞姣忛〉鏁伴噺",
+                    value: controller.followPageSize.value,
+                    valueMap: const {
+                      50: "50",
+                      100: "100",
+                      150: "150",
+                      200: "200",
+                      300: "300",
+                      400: "400",
+                    },
+                    onChanged: (value) {
+                      controller.setFollowPageSize(value);
+                    },
                   ),
                 ),
               ],

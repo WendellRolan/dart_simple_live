@@ -6,6 +6,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:simple_live_tv_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_tv_app/app/desktop_startup_args.dart';
+import 'package:simple_live_tv_app/app/log.dart';
 import 'package:simple_live_tv_app/modules/multi_room/multi_room_models.dart';
 
 class DesktopMultiWindowService {
@@ -43,11 +44,20 @@ class DesktopMultiWindowService {
       if (gap == 0) {
         args.add(DesktopStartupArgs.framelessTileArg);
       }
+      Log.i(
+        "TV-Windows multi-open start site=${room.site.id} roomId=${room.roomId} "
+        "bounds=${rect.left},${rect.top},${rect.width},${rect.height} "
+        "args=${args.join(" ")}",
+      );
       final process = await Process.start(
         executable,
         args,
+        environment: {
+          DesktopStartupArgs.secondaryInstanceEnv: "1",
+        },
         mode: ProcessStartMode.detached,
       );
+      Log.i("TV-Windows multi-open child pid=${process.pid}");
       _openedProcessIds.add(process.pid);
       await Future<void>.delayed(const Duration(milliseconds: 220));
     }

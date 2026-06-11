@@ -4,11 +4,11 @@ import 'package:simple_live_tv_app/app/app_focus_node.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/base_controller.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 class CategoryController extends BasePageController<AppLiveCategory> {
   var siteId = Constant.kBiliBili.obs;
   var site = Sites.allSites[Constant.kBiliBili]!;
+  int _siteSwitchGeneration = 0;
 
   @override
   void onInit() {
@@ -18,12 +18,9 @@ class CategoryController extends BasePageController<AppLiveCategory> {
 
   Future<void> setSite(String id) async {
     if (siteId.value == id) return;
-    if (loadding.value) {
-      SmartDialog.showToast("正在加载，请稍后再试");
-      return;
-    }
 
     final nextSite = Sites.allSites[id]!;
+    final generation = ++_siteSwitchGeneration;
     try {
       loadding.value = true;
       pageError.value = false;
@@ -32,6 +29,9 @@ class CategoryController extends BasePageController<AppLiveCategory> {
       pageLoadding.value = true;
 
       final result = await nextSite.liveSite.getCategores();
+      if (generation != _siteSwitchGeneration) {
+        return;
+      }
       final categories = result
           .map((e) => AppLiveCategory.fromLiveCategory(e, nextSite))
           .toList();
@@ -46,10 +46,15 @@ class CategoryController extends BasePageController<AppLiveCategory> {
         scrollController.jumpTo(0);
       }
     } catch (e) {
+      if (generation != _siteSwitchGeneration) {
+        return;
+      }
       handleError(e);
     } finally {
-      loadding.value = false;
-      pageLoadding.value = false;
+      if (generation == _siteSwitchGeneration) {
+        loadding.value = false;
+        pageLoadding.value = false;
+      }
     }
   }
 

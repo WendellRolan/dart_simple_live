@@ -7,6 +7,7 @@ import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/modules/settings/other/other_settings_controller.dart';
+import 'package:simple_live_app/services/mpv_options_service.dart';
 import 'package:simple_live_app/widgets/settings/settings_action.dart';
 import 'package:simple_live_app/widgets/settings/settings_card.dart';
 import 'package:simple_live_app/widgets/settings/settings_menu.dart';
@@ -132,6 +133,18 @@ class OtherSettingsPage extends GetView<OtherSettingsController> {
                 ),
                 AppStyle.divider,
                 Obx(
+                  () => SettingsMenu(
+                    title: "mpv 性能档位",
+                    subtitle: "流畅适合核显/低功耗，均衡为默认，画质适合高性能显卡",
+                    value: AppSettingsController.instance.mpvProfile.value,
+                    valueMap: MpvOptionsService.profileLabels,
+                    onChanged: (e) {
+                      AppSettingsController.instance.setMpvProfile(e);
+                    },
+                  ),
+                ),
+                AppStyle.divider,
+                Obx(
                   () => SettingsSwitch(
                     value:
                         AppSettingsController.instance.customPlayerOutput.value,
@@ -139,6 +152,30 @@ class OtherSettingsPage extends GetView<OtherSettingsController> {
                     onChanged: (e) {
                       AppSettingsController.instance.setCustomPlayerOutput(e);
                     },
+                  ),
+                ),
+                AppStyle.divider,
+                GetBuilder<OtherSettingsController>(
+                  builder: (controller) => SettingsAction(
+                    title: "高级 mpv options",
+                    subtitle: "每行一个 key=value，覆盖内置档位和可视化设置",
+                    value: AppSettingsController
+                            .instance.mpvAdvancedOptions.value.isEmpty
+                        ? "未设置"
+                        : "已设置",
+                    onTap: controller.editMpvAdvancedOptions,
+                  ),
+                ),
+                AppStyle.divider,
+                GetBuilder<OtherSettingsController>(
+                  builder: (controller) => SettingsAction(
+                    title: "导入 mpv.conf",
+                    subtitle: "导入后复制到应用私有目录，覆盖同名 mpv option",
+                    value: AppSettingsController
+                            .instance.importedMpvConfPath.value.isEmpty
+                        ? "未导入"
+                        : "已导入",
+                    onTap: controller.importMpvConf,
                   ),
                 ),
                 AppStyle.divider,

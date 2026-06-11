@@ -119,8 +119,12 @@ class LocalStorageService extends GetxService {
   /// 播放器缓冲区大小
   static const String kPlayerBufferSize = "PlayerBufferSize";
   static const String kPlayerForceHttps = "PlayerForceHttps";
+  static const String kAutoSwitchNextOnLiveEnd = "AutoSwitchNextOnLiveEnd";
+  static const String kAutoSwitchNextOnPlaybackFailure =
+      "AutoSwitchNextOnPlaybackFailure";
   static const String kPlayerVolume = "PlayerVolume";
   static const String kLogEnable = "LogEnable";
+  static const String kMpvProfile = "MpvProfile";
 
   /// 自动全屏
   static const String kAutoFullScreen = "AutoFullScreen";
@@ -151,12 +155,19 @@ class LocalStorageService extends GetxService {
 
   /// 开启多线程更新关注
   static const String kUpdateFollowThreadCount = "UpdateFollowThreadCount";
+  static const String kFollowPageSize = "FollowPageSize";
 
   /// 远程同步服务地址
   static const String kSyncServerUrl = "SyncServerUrl";
 
   /// 远程同步代理地址
   static const String kSyncProxyUrl = "SyncProxyUrl";
+
+  static const String kWebDAVUri = "WebDAVUri";
+  static const String kWebDAVUser = "WebDAVUser";
+  static const String kWebDAVPassword = "kWebDAVPassword";
+  static const String kWebDAVLastUploadTime = "kWebDAVLastUploadTime";
+  static const String kWebDAVLastRecoverTime = "kWebDAVLastRecoverTime";
 
   late Box settingsBox;
   late Box<String> shieldBox;

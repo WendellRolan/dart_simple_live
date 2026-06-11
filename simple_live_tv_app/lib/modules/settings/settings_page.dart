@@ -10,6 +10,7 @@ import 'package:simple_live_tv_app/modules/settings/settings_controller.dart';
 import 'package:simple_live_tv_app/services/bilibili_account_service.dart';
 import 'package:simple_live_tv_app/services/douyin_account_service.dart';
 import 'package:simple_live_tv_app/services/follow_user_service.dart';
+import 'package:simple_live_tv_app/services/mpv_options_service.dart';
 import 'package:simple_live_tv_app/services/signalr_service.dart';
 import 'package:simple_live_tv_app/widgets/app_scaffold.dart';
 import 'package:simple_live_tv_app/widgets/button/highlight_button.dart';
@@ -134,7 +135,7 @@ class SettingsPage extends GetView<SettingsController> {
               children: [
                 buildPlayerSettings(),
                 buildDanmakuSettings(),
-                buildFollowSettings(),
+                buildFollowSettings(context),
                 buildMultiRoomSettings(),
                 buildAccountSettings(),
                 buildAbout(),
@@ -168,6 +169,19 @@ class SettingsPage extends GetView<SettingsController> {
                 AppSettingsController.instance.danmuRenderEmoji.value ? 1 : 0,
             onChanged: (e) {
               AppSettingsController.instance.setDanmuRenderEmoji(e == 1);
+            },
+          ),
+        ),
+        AppStyle.vGap24,
+        Obx(
+          () => SettingsItemWidget(
+            foucsNode: controller.mpvProfileFocusNode,
+            autofocus: controller.mpvProfileFocusNode.isFoucsed.value,
+            title: "mpv档位",
+            items: MpvOptionsService.profileLabels,
+            value: AppSettingsController.instance.mpvProfile.value,
+            onChanged: (e) {
+              AppSettingsController.instance.setMpvProfile(e);
             },
           ),
         ),
@@ -209,6 +223,36 @@ class SettingsPage extends GetView<SettingsController> {
         AppStyle.vGap24,
         Obx(
           () => SettingsItemWidget(
+            foucsNode: AppFocusNode(),
+            title: "关播后自动换下一个直播间",
+            items: const {0: "关", 1: "开"},
+            value: AppSettingsController.instance.autoSwitchNextOnLiveEnd.value
+                ? 1
+                : 0,
+            onChanged: (e) {
+              AppSettingsController.instance.setAutoSwitchNextOnLiveEnd(e == 1);
+            },
+          ),
+        ),
+        AppStyle.vGap24,
+        Obx(
+          () => SettingsItemWidget(
+            foucsNode: AppFocusNode(),
+            title: "播放失败后自动换下一个直播间",
+            items: const {0: "关", 1: "开"},
+            value: AppSettingsController
+                    .instance.autoSwitchNextOnPlaybackFailure.value
+                ? 1
+                : 0,
+            onChanged: (e) {
+              AppSettingsController.instance
+                  .setAutoSwitchNextOnPlaybackFailure(e == 1);
+            },
+          ),
+        ),
+        AppStyle.vGap24,
+        Obx(
+          () => SettingsItemWidget(
             foucsNode: controller.scaleFoucsNode,
             autofocus: controller.scaleFoucsNode.isFoucsed.value,
             title: "画面比例",
@@ -239,6 +283,27 @@ class SettingsPage extends GetView<SettingsController> {
             value: AppSettingsController.instance.qualityLevel.value,
             onChanged: (e) {
               AppSettingsController.instance.setQualityLevel(e);
+            },
+          ),
+        ),
+        AppStyle.vGap24,
+        Obx(
+          () => SettingsItemWidget(
+            foucsNode: controller.followPageSizeFocusNode,
+            autofocus: controller.followPageSizeFocusNode.isFoucsed.value,
+            title: "鍏虫敞姣忛〉鏁伴噺",
+            items: const {
+              50: "50",
+              100: "100",
+              150: "150",
+              200: "200",
+              300: "300",
+              400: "400",
+            },
+            value: AppSettingsController.instance.followPageSize.value,
+            onChanged: (e) {
+              AppSettingsController.instance.setFollowPageSize(e);
+              FollowUserService.instance.applyPageSizeSetting();
             },
           ),
         ),
@@ -274,10 +339,15 @@ class SettingsPage extends GetView<SettingsController> {
     );
   }
 
-  Widget buildFollowSettings() {
+  Widget buildFollowSettings(BuildContext context) {
     return ListView(
       padding: AppStyle.edgeInsetsA48,
       children: [
+        Text(
+          "大量关注时，自动刷新会等待上一轮完成；可在关注页使用分页刷新。",
+          style: AppStyle.subTextStyleWhite,
+        ),
+        AppStyle.vGap24,
         Obx(
           () => SettingsItemWidget(
             foucsNode: controller.autoUpdateFollowEnableFocusNode,
@@ -300,25 +370,17 @@ class SettingsPage extends GetView<SettingsController> {
         ),
         AppStyle.vGap24,
         Obx(
-          () => SettingsItemWidget(
-            foucsNode: controller.autoUpdateFollowDurationFocusNode,
+          () => HighlightListTile(
+            focusNode: controller.autoUpdateFollowDurationFocusNode,
             autofocus:
                 controller.autoUpdateFollowDurationFocusNode.isFoucsed.value,
             title: "自动更新间隔",
-            items: const {
-              5: "5分钟",
-              10: "10分钟",
-              15: "15分钟",
-              20: "20分钟",
-              25: "25分钟",
-              30: "30分钟",
-              60: "1小时",
-            },
-            value:
-                AppSettingsController.instance.autoUpdateFollowDuration.value,
-            onChanged: (e) {
-              AppSettingsController.instance.setAutoUpdateFollowDuration(e);
-              FollowUserService.instance.initTimer();
+            subtitle: _formatFollowUpdateDuration(
+              AppSettingsController.instance.autoUpdateFollowDuration.value,
+            ),
+            leading: const Icon(Icons.timer_outlined),
+            onTap: () {
+              setFollowUpdateTimer(context);
             },
           ),
         ),
@@ -349,6 +411,38 @@ class SettingsPage extends GetView<SettingsController> {
         ),
       ],
     );
+  }
+
+  String _formatFollowUpdateDuration(int minutes) {
+    return "${minutes ~/ 60}小时${minutes % 60}分钟";
+  }
+
+  void setFollowUpdateTimer(BuildContext context) async {
+    final value = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour:
+            AppSettingsController.instance.autoUpdateFollowDuration.value ~/ 60,
+        minute:
+            AppSettingsController.instance.autoUpdateFollowDuration.value % 60,
+      ),
+      initialEntryMode: TimePickerEntryMode.inputOnly,
+      builder: (_, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            alwaysUse24HourFormat: true,
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (value == null || (value.hour == 0 && value.minute == 0)) {
+      return;
+    }
+    final duration = Duration(hours: value.hour, minutes: value.minute);
+    AppSettingsController.instance
+        .setAutoUpdateFollowDuration(duration.inMinutes);
+    FollowUserService.instance.initTimer();
   }
 
   Widget buildDanmakuSettings() {

@@ -9,6 +9,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:simple_live_core/simple_live_core.dart';
 import 'package:simple_live_tv_app/app/constant.dart';
 import 'package:simple_live_tv_app/app/controller/app_settings_controller.dart';
+import 'package:simple_live_tv_app/app/desktop_startup_args.dart';
 import 'package:simple_live_tv_app/app/event_bus.dart';
 import 'package:simple_live_tv_app/app/log.dart';
 import 'package:simple_live_tv_app/app/sites.dart';
@@ -16,6 +17,7 @@ import 'package:simple_live_tv_app/app/utils.dart';
 import 'package:simple_live_tv_app/models/db/follow_user.dart';
 import 'package:simple_live_tv_app/models/db/history.dart';
 import 'package:simple_live_tv_app/modules/live_room/player/player_controller.dart';
+import 'package:simple_live_tv_app/services/current_room_service.dart';
 import 'package:simple_live_tv_app/services/db_service.dart';
 import 'package:simple_live_tv_app/services/follow_user_service.dart';
 
@@ -40,7 +42,9 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   Rx<LiveRoomDetail?> detail = Rx<LiveRoomDetail?>(null);
   var online = 0.obs;
   var followed = false.obs;
+  var specialFollowed = false.obs;
   var liveStatus = false.obs;
+  bool _autoSwitchingRoom = false;
 
   /// 清晰度数据
   RxList<LivePlayQuality> qualites = RxList<LivePlayQuality>();
@@ -87,10 +91,17 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
 
   @override
   void onInit() {
+    CurrentRoomService.instance.setRoom(site, roomId);
     initTimer();
     _startLiveEventFlowTimer();
-    showDanmakuState.value = AppSettingsController.instance.danmuEnable.value;
+    showDanmakuState.value = DesktopStartupArgs.isSecondaryDesktopInstance
+        ? false
+        : AppSettingsController.instance.danmuEnable.value;
     followed.value = DBService.instance.getFollowExist("${site.id}_$roomId");
+    specialFollowed.value = DBService.instance.followBox
+            .get("${site.id}_$roomId")
+            ?.isSpecialFollow ??
+        false;
 
     loadData();
 
@@ -449,6 +460,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   void setPlayer() async {
     currentLineInfo.value = "线路${currentLineIndex + 1}";
     errorMsg.value = "";
+    await initializePlayer();
     player.open(
       Media(
         playUrls[currentLineIndex],
@@ -477,6 +489,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     // 遍历线路，如果全部链接都断开就是直播结束了
     if (playUrls.length - 1 == currentLineIndex) {
       liveStatus.value = false;
+      await _tryAutoSwitchToNextLiveRoom(reason: "live_end");
     } else {
       changePlayLine(currentLineIndex + 1);
 
@@ -502,10 +515,55 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     if (playUrls.length - 1 == currentLineIndex) {
       errorMsg.value = "播放失败";
       SmartDialog.showToast("播放失败:$error");
+      await _tryAutoSwitchToNextLiveRoom(reason: "playback_failure");
     } else {
       //currentLineIndex += 1;
       //setPlayer();
       changePlayLine(currentLineIndex + 1);
+    }
+  }
+
+  Future<void> _tryAutoSwitchToNextLiveRoom({required String reason}) async {
+    final settings = AppSettingsController.instance;
+    final enabled = reason == "live_end"
+        ? settings.autoSwitchNextOnLiveEnd.value
+        : settings.autoSwitchNextOnPlaybackFailure.value;
+    if (!enabled || _autoSwitchingRoom) {
+      return;
+    }
+
+    final liveChannels = FollowUserService.instance.livingList.toList();
+    if (liveChannels.isEmpty) {
+      return;
+    }
+
+    final currentId = "${site.id}_$roomId";
+    final currentIndex =
+        liveChannels.indexWhere((item) => item.id == currentId);
+    final candidates =
+        liveChannels.where((item) => item.id != currentId).toList();
+    if (candidates.isEmpty) {
+      return;
+    }
+
+    FollowUser target;
+    if (currentIndex < 0 || currentIndex >= liveChannels.length - 1) {
+      target = candidates.first;
+    } else {
+      target = liveChannels[currentIndex + 1];
+      if (target.id == currentId) {
+        target = candidates.first;
+      }
+    }
+
+    _autoSwitchingRoom = true;
+    try {
+      SmartDialog.showToast(
+        reason == "live_end" ? "当前直播已结束，已切换到下一个直播间" : "当前直播播放失败，已切换到下一个直播间",
+      );
+      resetRoom(Sites.allSites[target.siteId]!, target.roomId);
+    } finally {
+      _autoSwitchingRoom = false;
     }
   }
 
@@ -548,6 +606,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       ),
     );
     followed.value = true;
+    specialFollowed.value = false;
     EventBus.instance.emit(Constant.kUpdateFollow, id);
     SmartDialog.showToast("已关注");
   }
@@ -564,8 +623,33 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     var id = "${site.id}_$roomId";
     DBService.instance.deleteFollow(id);
     followed.value = false;
+    specialFollowed.value = false;
     EventBus.instance.emit(Constant.kUpdateFollow, id);
     SmartDialog.showToast("已取消关注");
+  }
+
+  void toggleSpecialFollow(bool enabled) {
+    if (detail.value == null) {
+      return;
+    }
+    final id = "${site.id}_$roomId";
+    var follow = DBService.instance.followBox.get(id);
+    if (follow == null) {
+      follow = FollowUser(
+        id: id,
+        roomId: roomId,
+        siteId: site.id,
+        userName: detail.value?.userName ?? "",
+        face: detail.value?.userAvatar ?? "",
+        addTime: DateTime.now(),
+      );
+    }
+    follow.isSpecialFollow = enabled;
+    DBService.instance.addFollow(follow);
+    followed.value = true;
+    specialFollowed.value = enabled;
+    EventBus.instance.emit(Constant.kUpdateFollow, id);
+    SmartDialog.showToast(enabled ? "已设为特别关注" : "已取消特别关注");
   }
 
   void resetRoom(Site site, String roomId) async {
@@ -575,6 +659,12 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
 
     rxSite.value = site;
     rxRoomId.value = roomId;
+    CurrentRoomService.instance.setRoom(site, roomId);
+    followed.value = DBService.instance.getFollowExist("${site.id}_$roomId");
+    specialFollowed.value = DBService.instance.followBox
+            .get("${site.id}_$roomId")
+            ?.isSpecialFollow ??
+        false;
 
     // 清除全部消息
     liveDanmaku.stop();
@@ -602,11 +692,10 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     }
     var index = liveChannels
         .indexWhere((element) => element.id == "${site.id}_$roomId");
-    // if (index == -1) {
-    //   //当前频道不在列表中
-
-    //   return;
-    // }
+    if (index == -1) {
+      SmartDialog.showToast("当前直播间不在直播列表中");
+      return;
+    }
     index += 1;
     if (index >= liveChannels.length) {
       index = 0;
@@ -625,11 +714,10 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     }
     var index = liveChannels
         .indexWhere((element) => element.id == "${site.id}_$roomId");
-    // if (index == -1) {
-    //   //当前频道不在列表中
-
-    //   return;
-    // }
+    if (index == -1) {
+      SmartDialog.showToast("当前直播间不在直播列表中");
+      return;
+    }
     index -= 1;
     if (index < 0) {
       index = liveChannels.length - 1;

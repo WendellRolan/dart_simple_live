@@ -17,6 +17,7 @@ import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/models/db/follow_user.dart';
 import 'package:simple_live_app/models/db/follow_user_tag.dart';
 import 'package:simple_live_app/services/bulk_data_import_service.dart';
+import 'package:simple_live_app/services/current_room_service.dart';
 import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/live_notification_service.dart';
 import 'package:simple_live_core/simple_live_core.dart';
@@ -183,22 +184,31 @@ class FollowService extends GetxService {
   /// 后台按关注规模自动控制，不再读取用户配置，避免超大关注列表刷崩。
   int getOptimalConcurrency({int? totalCount}) {
     final count = totalCount ?? followList.length;
+    final currentSiteId = CurrentRoomService.instance.siteId.value;
+    final maxWhenPlayingDouyin = currentSiteId == Constant.kDouyin ? 4 : null;
     if (count <= 0) {
       return 1;
     }
+    int cap(int value) {
+      if (maxWhenPlayingDouyin == null) {
+        return value;
+      }
+      return value.clamp(1, maxWhenPlayingDouyin).toInt();
+    }
+
     if (count <= 300) {
-      return count < 48 ? count : 48;
+      return cap(count < 48 ? count : 48);
     }
     if (count <= 1000) {
-      return 32;
+      return cap(32);
     }
     if (count <= 3000) {
-      return 20;
+      return cap(20);
     }
     if (count <= 5000) {
-      return 12;
+      return cap(12);
     }
-    return 8;
+    return cap(8);
   }
 
   /// 按平台交错排列，避免单一平台阻塞
@@ -220,6 +230,23 @@ class FollowService extends GetxService {
     }
 
     return result;
+  }
+
+  List<FollowUser> deprioritizeCurrentRoom(List<FollowUser> items) {
+    final currentKey = CurrentRoomService.instance.currentKey;
+    if (currentKey.isEmpty) {
+      return items;
+    }
+    final currentItems = <FollowUser>[];
+    final others = <FollowUser>[];
+    for (final item in items) {
+      if (item.id == currentKey) {
+        currentItems.add(item);
+      } else {
+        others.add(item);
+      }
+    }
+    return [...others, ...currentItems];
   }
 
   Future<void> startUpdateStatus({bool force = false}) async {
@@ -248,7 +275,9 @@ class FollowService extends GetxService {
     );
 
     // 按平台交错排列，避免单一平台阻塞
-    var interleavedList = interleaveByPlatform(followList);
+    var interleavedList = deprioritizeCurrentRoom(
+      interleaveByPlatform(followList),
+    );
 
     // 创建任务队列
     var taskQueue = Queue<FollowUser>.from(interleavedList);
@@ -355,18 +384,134 @@ class FollowService extends GetxService {
   }
 
   int compareFollowUsers(FollowUser a, FollowUser b) {
-    if (a.isSpecialFollow != b.isSpecialFollow) {
-      return a.isSpecialFollow ? -1 : 1;
-    }
-    final liveCompare = b.liveStatus.value.compareTo(a.liveStatus.value);
+    final aBucket = _sortBucket(a);
+    final bBucket = _sortBucket(b);
+    final liveCompare = aBucket.compareTo(bBucket);
     if (liveCompare != 0) {
       return liveCompare;
     }
     return b.addTime.compareTo(a.addTime);
   }
 
+  int _sortBucket(FollowUser item) {
+    final isLiving = item.liveStatus.value == 2;
+    if (item.isSpecialFollow) {
+      return isLiving ? 0 : 1;
+    }
+    return isLiving ? 2 : 3;
+  }
+
   List<FollowUser> sortFollowUsers(Iterable<FollowUser> items) {
     return items.toList()..sort(compareFollowUsers);
+  }
+
+  List<FollowUser> _distinctFollowUsers(Iterable<FollowUser> items) {
+    final result = <FollowUser>[];
+    final seenIds = <String>{};
+    for (final item in items) {
+      final uniqueId = item.id.trim().isNotEmpty
+          ? item.id.trim()
+          : "${item.siteId}_${item.roomId}";
+      if (seenIds.add(uniqueId)) {
+        result.add(item);
+      }
+    }
+    return result;
+  }
+
+  List<FollowUser> _buildRefreshTargets(
+    Iterable<FollowUser> normalTargets, {
+    bool includeAllNormals = false,
+  }) {
+    final specials = followList.where((item) => item.isSpecialFollow).toList();
+    final normals = includeAllNormals
+        ? followList.where((item) => !item.isSpecialFollow).toList()
+        : normalTargets.where((item) => !item.isSpecialFollow).toList();
+    return _distinctFollowUsers([
+      ...sortFollowUsers(specials),
+      ...sortFollowUsers(normals),
+    ]);
+  }
+
+  Future<void> refreshSelectedStatus(
+    Iterable<FollowUser> normalTargets, {
+    bool includeAllNormals = false,
+    bool force = true,
+  }) {
+    final targets = _buildRefreshTargets(
+      normalTargets,
+      includeAllNormals: includeAllNormals,
+    );
+    return _refreshStatusTargets(targets, force: force);
+  }
+
+  Future<void> _refreshStatusTargets(
+    List<FollowUser> targets, {
+    bool force = false,
+  }) async {
+    final now = DateTime.now();
+    final lastStartedAt = _lastUpdateStatusStartedAt;
+    if (!force &&
+        lastStartedAt != null &&
+        now.difference(lastStartedAt) < updateStatusCooldown) {
+      Log.logPrint("????????????????????");
+      updating.value = false;
+      filterData();
+      return;
+    }
+    _lastUpdateStatusStartedAt = now;
+    final generation = ++_updateGeneration;
+    if (updating.value) {
+      Log.logPrint("??????????????????????");
+    }
+    updating.value = true;
+
+    if (targets.isEmpty) {
+      updating.value = false;
+      filterData();
+      return;
+    }
+
+    var concurrency = getOptimalConcurrency(totalCount: targets.length);
+    final policy = BulkDataImportService.policyForCount(targets.length);
+
+    Log.logPrint(
+      "???????????? $concurrency???: ${targets.length}???: ${policy.label}",
+    );
+
+    final specials = targets.where((item) => item.isSpecialFollow).toList();
+    final normals = targets.where((item) => !item.isSpecialFollow).toList();
+    final taskQueue = Queue<FollowUser>.from(
+      deprioritizeCurrentRoom([
+        ...interleaveByPlatform(specials),
+        ...interleaveByPlatform(normals),
+      ]),
+    );
+
+    Future<void> worker(int workerId) async {
+      while (taskQueue.isNotEmpty) {
+        if (generation != _updateGeneration) {
+          return;
+        }
+        var item = taskQueue.removeFirst();
+        await updateLiveStatus(item, generation: generation);
+      }
+    }
+
+    var workers = <Future>[];
+    for (var i = 0; i < concurrency; i++) {
+      workers.add(worker(i));
+    }
+
+    await Future.wait(workers);
+
+    if (generation != _updateGeneration) {
+      return;
+    }
+    filterData();
+    updating.value = false;
+
+    Log.logPrint("????????");
   }
 
   void filterData() {

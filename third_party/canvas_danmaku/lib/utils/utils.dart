@@ -20,6 +20,7 @@ class Utils {
     DanmakuContentItem content,
     double fontSize,
     int fontWeight,
+    double emojiScale,
   ) {
     final parts = contentParts(content);
     final text = parts
@@ -37,7 +38,7 @@ class Utils {
       textDirection: TextDirection.ltr,
     )..layout();
     final imageCount = imageUrlsForContent(content).length;
-    final imageSize = fontSize * 1.25;
+    final imageSize = fontSize * emojiScale;
     return Size(
       textPainter.width + imageCount * imageSize,
       textPainter.height > imageSize ? textPainter.height : imageSize,
@@ -49,6 +50,7 @@ class Utils {
     double danmakuWidth,
     double fontSize,
     int fontWeight,
+    double emojiScale,
   ) {
     final builder = ui.ParagraphBuilder(
       ui.ParagraphStyle(
@@ -58,7 +60,7 @@ class Utils {
         textDirection: TextDirection.ltr,
       ),
     )..pushStyle(ui.TextStyle(color: content.color));
-    _appendContent(builder, content, fontSize);
+    _appendContent(builder, content, fontSize, emojiScale);
     return builder.build()
       ..layout(ui.ParagraphConstraints(width: danmakuWidth));
   }
@@ -68,6 +70,7 @@ class Utils {
     double danmakuWidth,
     double fontSize,
     int fontWeight,
+    double emojiScale,
   ) {
     final Paint strokePaint = Paint()
       ..style = PaintingStyle.stroke
@@ -82,7 +85,7 @@ class Utils {
         textDirection: TextDirection.ltr,
       ),
     )..pushStyle(ui.TextStyle(foreground: strokePaint));
-    _appendContent(strokeBuilder, content, fontSize);
+    _appendContent(strokeBuilder, content, fontSize, emojiScale);
 
     return strokeBuilder.build()
       ..layout(ui.ParagraphConstraints(width: danmakuWidth));
@@ -173,8 +176,9 @@ class Utils {
     ui.ParagraphBuilder builder,
     DanmakuContentItem content,
     double fontSize,
+    double emojiScale,
   ) {
-    final imageSize = fontSize * 1.25;
+    final imageSize = fontSize * emojiScale;
     for (final part in contentParts(content)) {
       if (part.isText) {
         builder.addText(part.text ?? "");

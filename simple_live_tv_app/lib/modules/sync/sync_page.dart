@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:simple_live_tv_app/app/app_focus_node.dart';
 import 'package:simple_live_tv_app/app/app_style.dart';
 import 'package:simple_live_tv_app/modules/sync/sync_controller.dart';
+import 'package:simple_live_tv_app/routes/route_path.dart';
 import 'package:simple_live_tv_app/services/signalr_service.dart';
 import 'package:simple_live_tv_app/services/sync_service.dart';
 import 'package:simple_live_tv_app/widgets/app_scaffold.dart';
@@ -41,6 +42,15 @@ class SyncPage extends GetView<SyncController> {
                 ),
               ),
               const Spacer(),
+              HighlightButton(
+                focusNode: AppFocusNode(),
+                iconData: Icons.cloud_outlined,
+                text: "WebDAV",
+                onTap: () {
+                  Get.toNamed(RoutePath.kWebDAV);
+                },
+              ),
+              AppStyle.hGap48,
             ],
           ),
           AppStyle.vGap24,

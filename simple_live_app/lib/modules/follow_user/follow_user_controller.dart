@@ -1,6 +1,7 @@
 // ignore_for_file: invalid_use_of_protected_member
 
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/controller/base_controller.dart';
@@ -13,6 +14,7 @@ import 'package:simple_live_app/models/db/follow_user.dart';
 import 'package:simple_live_app/models/db/follow_user_tag.dart';
 import 'package:simple_live_app/modules/multi_room/multi_room_models.dart';
 import 'package:simple_live_app/routes/app_navigation.dart';
+import 'package:simple_live_app/services/current_room_service.dart';
 import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/desktop_multi_window_service.dart';
 import 'package:simple_live_app/services/follow_service.dart';
@@ -37,6 +39,7 @@ class FollowGroupOption {
 }
 
 class FollowUserController extends BasePageController<FollowUser> {
+  static const int paginationThreshold = 400;
   StreamSubscription<dynamic>? onUpdatedIndexedStream;
   StreamSubscription<dynamic>? onUpdatedListStream;
 
@@ -44,6 +47,9 @@ class FollowUserController extends BasePageController<FollowUser> {
   var selectedGroupId = "all".obs;
   var multiSelectMode = false.obs;
   RxSet<String> selectedMultiRoomKeys = <String>{}.obs;
+  var currentDisplayPage = 1.obs;
+  var totalDisplayPages = 1.obs;
+  var paginationEnabled = false.obs;
   RxList<FollowUserTag> tagList = [
     FollowUserTag(id: "0", tag: "全部", userId: []),
     FollowUserTag(id: "1", tag: "直播中", userId: []),
@@ -55,6 +61,7 @@ class FollowUserController extends BasePageController<FollowUser> {
 
   @override
   void onInit() {
+    pageSize = AppSettingsController.instance.followPageSize.value;
     _restoreGroupSelection();
     onUpdatedIndexedStream = EventBus.instance.listen(
       EventBus.kBottomNavigationBarClicked,
@@ -81,6 +88,7 @@ class FollowUserController extends BasePageController<FollowUser> {
 
   @override
   Future refreshData({bool forceStatus = true}) async {
+    pageSize = AppSettingsController.instance.followPageSize.value;
     await FollowService.instance.loadData(forceUpdateStatus: forceStatus);
     updateTagList();
     filterData();
@@ -108,13 +116,108 @@ class FollowUserController extends BasePageController<FollowUser> {
   }
 
   void filterData() {
-    currentPage = 1;
     final items = _filterBySelectedGroup();
-    final end = pageSize.clamp(0, items.length).toInt();
-    list.assignAll(items.sublist(0, end));
-    currentPage = end < items.length ? 2 : 1;
-    canLoadMore.value = end < items.length;
+    _rebuildPagedList(items);
     pageEmpty.value = items.isEmpty;
+  }
+
+  void _rebuildPagedList(List<FollowUser> items) {
+    pageSize = AppSettingsController.instance.followPageSize.value;
+    paginationEnabled.value = items.length > paginationThreshold;
+    if (!paginationEnabled.value) {
+      currentDisplayPage.value = 1;
+      totalDisplayPages.value = 1;
+      currentPage = items.isEmpty ? 1 : 2;
+      canLoadMore.value = false;
+      list.assignAll(items);
+      _scrollToCurrentRoom(_currentRoomIndexIn(items), items.length);
+      return;
+    }
+
+    final maxPageSize = ((items.length / 2).floor() + 1).clamp(2, items.length);
+    final effectivePageSize = pageSize.clamp(2, maxPageSize).toInt();
+    if (effectivePageSize != pageSize) {
+      pageSize = effectivePageSize;
+      AppSettingsController.instance.setFollowPageSize(effectivePageSize);
+    }
+    totalDisplayPages.value = (items.length / effectivePageSize).ceil().clamp(1, items.length);
+    if (currentDisplayPage.value > totalDisplayPages.value) {
+      currentDisplayPage.value = totalDisplayPages.value;
+    }
+    if (currentDisplayPage.value < 1) {
+      currentDisplayPage.value = 1;
+    }
+    final start = (currentDisplayPage.value - 1) * effectivePageSize;
+    final end = (start + effectivePageSize).clamp(0, items.length).toInt();
+    list.assignAll(items.sublist(start, end));
+    currentPage = currentDisplayPage.value;
+    canLoadMore.value = false;
+    final currentIndex = _currentRoomIndexIn(list);
+    _scrollToCurrentRoom(currentIndex, list.length);
+  }
+
+  List<FollowUser> get currentPageNormalTargets =>
+      list.where((item) => !item.isSpecialFollow).toList();
+
+  Future<void> refreshCurrentPageStatus() async {
+    final targets = paginationEnabled.value
+        ? currentPageNormalTargets
+        : _filterBySelectedGroup().where((item) => !item.isSpecialFollow);
+    await FollowService.instance.refreshSelectedStatus(targets, force: true);
+    filterData();
+  }
+
+  Future<void> refreshAllStatus() async {
+    await FollowService.instance.refreshSelectedStatus(
+      _filterBySelectedGroup(),
+      includeAllNormals: true,
+      force: true,
+    );
+    filterData();
+  }
+
+  void goToNextPage() {
+    if (!paginationEnabled.value || currentDisplayPage.value >= totalDisplayPages.value) {
+      return;
+    }
+    currentDisplayPage.value += 1;
+    filterData();
+  }
+
+  void goToPreviousPage() {
+    if (!paginationEnabled.value || currentDisplayPage.value <= 1) {
+      return;
+    }
+    currentDisplayPage.value -= 1;
+    filterData();
+  }
+
+  int _currentRoomIndexIn(List<FollowUser> items) {
+    final currentKey = CurrentRoomService.instance.currentKey;
+    if (currentKey.isEmpty) {
+      return -1;
+    }
+    return items.indexWhere((item) => "${item.siteId}_${item.roomId}" == currentKey);
+  }
+
+  void _scrollToCurrentRoom(int index, int visibleCount) {
+    if (index < 0 || index >= visibleCount) {
+      return;
+    }
+    Future.delayed(const Duration(milliseconds: 80), () {
+      if (!scrollController.hasClients) {
+        return;
+      }
+      final targetOffset = (index * 132.0).clamp(
+        0.0,
+        scrollController.position.maxScrollExtent,
+      );
+      scrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   List<FollowUser> _distinctFollowUsers(Iterable<FollowUser> items) {

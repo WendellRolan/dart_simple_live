@@ -49,6 +49,8 @@ class HuyaSite implements LiveSite {
 
   @override
   String name = "虎牙直播";
+  static List<LiveCategory>? _cachedCategories;
+  static DateTime? _cachedCategoriesAt;
 
   @override
   LiveDanmaku getDanmaku() => HuyaDanmaku();
@@ -90,6 +92,21 @@ class HuyaSite implements LiveSite {
 
   @override
   Future<List<LiveCategory>> getCategores() async {
+    final cached = _cachedCategories;
+    final cachedAt = _cachedCategoriesAt;
+    if (cached != null &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) < const Duration(minutes: 15)) {
+      return cached
+          .map(
+            (item) => LiveCategory(
+              id: item.id,
+              name: item.name,
+              children: List<LiveSubCategory>.from(item.children),
+            ),
+          )
+          .toList();
+    }
     List<LiveCategory> categories = [
       LiveCategory(id: "1", name: "网游", children: []),
       LiveCategory(id: "2", name: "单机", children: []),
@@ -97,10 +114,23 @@ class HuyaSite implements LiveSite {
       LiveCategory(id: "3", name: "手游", children: []),
     ];
 
-    for (var item in categories) {
-      var items = await getSubCategores(item.id);
+    final subCategories =
+        await Future.wait(categories.map((item) => getSubCategores(item.id)));
+    for (var i = 0; i < categories.length; i += 1) {
+      var item = categories[i];
+      var items = subCategories[i];
       item.children.addAll(items);
     }
+    _cachedCategories = categories
+        .map(
+          (item) => LiveCategory(
+            id: item.id,
+            name: item.name,
+            children: List<LiveSubCategory>.from(item.children),
+          ),
+        )
+        .toList();
+    _cachedCategoriesAt = DateTime.now();
     return categories;
   }
 
